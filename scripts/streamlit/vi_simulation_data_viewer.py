@@ -3,10 +3,9 @@ import pickle
 import numpy as np
 import sys
 import matplotlib.pyplot as plt
-sys.path.append("../../notebooks/")
-sys.path.append("../../notebooks/notebook_modules/")
+sys.path.append("../../")
 
-from notebook_modules.general_module import (Estimate,
+from notebooks.notebook_modules.general_module import (Estimate,
                             Observation,
                             prediction_step,
                             create_surface_plot,
