@@ -5,7 +5,8 @@ import sys
 import matplotlib.pyplot as plt
 sys.path.append("../../notebooks/")
 sys.path.append("../../notebooks/notebook_modules/")
-from general_module import (Estimate,
+
+from notebook_modules.general_module import (Estimate,
                             Observation,
                             prediction_step,
                             create_surface_plot,
