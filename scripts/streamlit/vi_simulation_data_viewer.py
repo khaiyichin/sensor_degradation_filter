@@ -9,7 +9,7 @@ sys.path.append("../../")
 from notebooks.notebook_modules.general_module import (Estimate,
 =======
 
-# For streamlit cloud
+# For streamlit cloud usage
 sys.path.append("/mount/src/sensor-degradation-filter/")
 
 from notebooks.general_module import (Estimate,
@@ -44,12 +44,7 @@ st.write("You can compare the approximated distribution found using variational 
 
 # Load data
 pickled_files = [
-    # "sim_data_VI_121723_234636.sdv", # set 1
-    # "sim_data_VI_121723_235437.sdv", # set 1
-    # "sim_data_VI_121823_012251.sdv", # set 2
-    # "sim_data_VI_121823_085151.sdv", # set 2
-    # "sim_data_VI_121823_092824.sdv", # set 2
-    # "sim_data_VI_121823_142720.sdv", # set 2
+    # Multiple data files can be added and combined to be visualized here
     "scripts/streamlit/sim_data_VI_122023_002701.sdv" # standalone
 ]
 
