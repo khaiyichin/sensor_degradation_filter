@@ -20,8 +20,6 @@ from notebooks.general_module import (Estimate,
                             create_contour_plot,
                             ZERO_APPROX)
 
-from notebooks.vi_simulation_module import SimDataVI
-
 # Function to convert numpy ndarray to LaTeX
 def np2latex_2d(mat):
     latex_str = np.array2string(mat, formatter={"float_kind":lambda x: "{:.2f}".format(x)}, max_line_width=np.inf)
@@ -52,7 +50,7 @@ pickled_files = [
     # "sim_data_VI_121823_085151.sdv", # set 2
     # "sim_data_VI_121823_092824.sdv", # set 2
     # "sim_data_VI_121823_142720.sdv", # set 2
-    "sim_data_VI_122023_002701.sdv" # standalone
+    "scripts/streamlit/sim_data_VI_122023_002701.sdv" # standalone
 ]
 
 import numpy as np
