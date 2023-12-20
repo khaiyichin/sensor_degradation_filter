@@ -3,14 +3,24 @@ import pickle
 import numpy as np
 import sys
 import matplotlib.pyplot as plt
+<<<<<<< HEAD
 sys.path.append("../../")
 
 from notebooks.notebook_modules.general_module import (Estimate,
+=======
+
+# For streamlit cloud
+sys.path.append("/mount/src/sensor-degradation-filter/")
+
+from notebooks.general_module import (Estimate,
+>>>>>>> Restructured directories.
                             Observation,
                             prediction_step,
                             create_surface_plot,
                             create_contour_plot,
                             ZERO_APPROX)
+
+from notebooks.vi_simulation_module import SimDataVI
 
 # Function to convert numpy ndarray to LaTeX
 def np2latex_2d(mat):
@@ -38,10 +48,11 @@ st.write("You can compare the approximated distribution found using variational 
 pickled_files = [
     # "sim_data_VI_121723_234636.sdv", # set 1
     # "sim_data_VI_121723_235437.sdv", # set 1
-    "sim_data_VI_121823_012251.sdv", # set 2
-    "sim_data_VI_121823_085151.sdv", # set 2
-    "sim_data_VI_121823_092824.sdv", # set 2
-    "sim_data_VI_121823_142720.sdv" # set 2
+    # "sim_data_VI_121823_012251.sdv", # set 2
+    # "sim_data_VI_121823_085151.sdv", # set 2
+    # "sim_data_VI_121823_092824.sdv", # set 2
+    # "sim_data_VI_121823_142720.sdv", # set 2
+    "sim_data_VI_122023_002701.sdv" # standalone
 ]
 
 import numpy as np

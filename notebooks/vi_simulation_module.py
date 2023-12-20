@@ -1,6 +1,6 @@
 import pickle
 from datetime import datetime
-from notebook_modules.general_module import ParamCombo
+from .general_module import ParamCombo
 
 # Define class to store the VI simulation data
 class SimDataVI:
