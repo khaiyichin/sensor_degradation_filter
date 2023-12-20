@@ -3,17 +3,11 @@ import pickle
 import numpy as np
 import sys
 import matplotlib.pyplot as plt
-<<<<<<< HEAD
-sys.path.append("../../")
-
-from notebooks.notebook_modules.general_module import (Estimate,
-=======
 
 # For streamlit cloud usage
 sys.path.append("/mount/src/sensor-degradation-filter/")
 
 from notebooks.general_module import (Estimate,
->>>>>>> Restructured directories.
                             Observation,
                             prediction_step,
                             create_surface_plot,
