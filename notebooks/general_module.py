@@ -3,6 +3,8 @@ from scipy import integrate, stats
 import scipy.stats._multivariate as multivar
 import matplotlib.pyplot as plt
 import itertools as itt
+import time
+from numba import jit, njit
 
 ZERO_APPROX = 1e-3
 
@@ -153,6 +155,33 @@ class ParamCombo:
     def are_matrices_equal(self, matrix1, matrix2, tol=1e-3):
         return np.allclose(matrix1, matrix2, atol=tol)
 
+# Reconstruct covariance matrix
+def reconstruct_cov_mat(C, diag_vals=None):
+    if C.size == 3 and diag_vals is None: # C contains the diagonal and off-diagonal terms
+        cov = np.diag(C[:2])
+        corr = C[2]
+        cov[0,1] = corr*np.sqrt(C[0]*C[1])
+        cov[1,0] = cov[0,1]
+    elif C.size == 2 and diag_vals is None: # C contains the diagonal terms
+        cov = np.diag(C)
+    elif C.size == 1 and diag_vals is not None: # C is the correlation
+        cov = np.diag(diag_vals)
+        cov[1,0] = C * np.sqrt(cov[0,0] * cov[1,1])
+        cov[0,1] = cov[1,0]
+    else:
+        raise RuntimeError("Unknown input dimensions, C={0}, diag_vals={1}".format(C, diag_vals))
+
+    return cov
+
+# Decorator to time functions
+def timing_decorator(func):
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        print(f"{func.__name__} took {end_time - start_time} seconds to run.")
+        return result
+    return wrapper
 
 #
 def generate_PSD_matrix(dim):
