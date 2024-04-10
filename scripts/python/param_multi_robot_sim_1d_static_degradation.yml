@@ -1,0 +1,19 @@
+---
+numRobots: 10 # total number of robots
+flawedRobotRange: # number of flawed robots that do degradation estimation
+  min: 1
+  max: 4
+  incSteps: 1
+commsPeriod: 10 # in units of observation rounds
+flawedSensorAccB: 0.75 # flawed assumed accuracy for black tile sensor
+flawedSensorAccW: 0.75 # flawed assumed accuracy for white tile sensor
+flawedSensorCovariance: 0 # (co-)variance of flawed assumed accuracy for both sensors
+correctSensorAccB: 0.95 # correct assumed accuracy for black tile sensor
+correctSensorAccW: 0.95 # correct assumed accuracy for white tile sensor
+targFillRatio: 0.55 # actual fill ratio of the environment
+sensorFilterPeriod: 2.5e+2 # in units of observation rounds
+numSteps: 1.0e+3 # number of steps (each observation is made per step)
+numTrials: 2 # number of trials to repeat for each parameter
+fullyConnected: True # whether to use a fully connected network or select neighbors using a right-skewed binomial distribution
+method: "ALPHA" # sensor filter method
+...
