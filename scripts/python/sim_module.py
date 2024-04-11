@@ -23,6 +23,7 @@ class SimParam:
         self.num_trials = int(yaml_config["numTrials"])
         self.fully_connected = bool(yaml_config["fullyConnected"])
         self.method = str(yaml_config["method"])
+        self.correct_robot_filter = bool(yaml_config["correctFilter"])
 
         # Flawed robot range
         flawed_robots_min = int(yaml_config["flawedRobotRange"]["min"])
@@ -76,6 +77,7 @@ class MultiRobotSimStaticDegradation:
         self.T = param.num_steps
         self.fully_connected = param.fully_connected
         self.method = param.method
+        self.correct_robot_filter = param.correct_robot_filter
 
         self.num_flawed_robots = num_flawed_robots
         self.trial_ind = trial_ind
@@ -98,6 +100,7 @@ class MultiRobotSimStaticDegradation:
             "fully_connected": self.fully_connected,
             "method": self.method,
             "trial_ind": self.trial_ind,
+            "correct_robot_filter": self.correct_robot_filter,
             "data_str": []
         }
 
@@ -109,15 +112,25 @@ class MultiRobotSimStaticDegradation:
         self.robot_sensor_w_estimates = np.zeros((self.num_robots, self.T+1))
 
         # Initialize all the robots and their occurrences
-        self.correct_robots = [
-            srsm.Robot(
-                1, # static degradation
-                0.0, # no variance
-                np.array([[self.act_b],[self.act_w]]),
-                np.array([[self.act_b],[self.act_w]]),
-                np.array([[self.sensor_cov],[self.sensor_cov]])
-            ) for _ in range(self.num_correct_robots)
-        ]
+        if not self.correct_robot_filter:
+            self.correct_robots = [
+                srsm.Robot(
+                    1, # static degradation
+                    0.0, # no variance
+                    np.array([[self.act_b],[self.act_w]]),
+                    np.array([[self.act_b],[self.act_w]]),
+                    np.array([[self.sensor_cov],[self.sensor_cov]])
+                ) for _ in range(self.num_correct_robots)
+            ]
+        else:
+            self.correct_robots = [
+                srsm.RobotStaticDegradation(
+                    param.method,
+                    np.array([[self.act_b],[self.act_w]]),
+                    np.array([[self.act_b],[self.act_w]]),
+                    np.array([[self.sensor_cov],[self.sensor_cov]])
+                ) for _ in range(self.num_correct_robots)
+            ]
         self.flawed_robots = [
             srsm.RobotStaticDegradation(
                 param.method,
@@ -176,7 +189,10 @@ class MultiRobotSimStaticDegradation:
         [robot.compute_informed_estimate() for robot in self.robots]
 
     def sensor_filter_step(self):
-        [self.robots[i].run_sensor_degradation_filter() for i in range(self.num_correct_robots, self.num_robots)]
+
+        start_ind = 0 if self.correct_robot_filter else self.num_correct_robots
+
+        [self.robots[i].run_sensor_degradation_filter() for i in range(start_ind, self.num_robots)]
 
     def log_data(self, t):
 
@@ -185,7 +201,6 @@ class MultiRobotSimStaticDegradation:
             est_vals = robot.get_est_sensor_quality()
             local_est, _ = robot.get_local_estimate()
             social_est, _ = robot.get_social_estimate()
-            flawed_bool = 1 if ind >= self.num_correct_robots else 0
 
             data_str = "{0},{1},{2},{3},{4}".format(
                 np.round(local_est, 3),

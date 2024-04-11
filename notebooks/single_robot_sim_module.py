@@ -1,0 +1,686 @@
+try:
+    from notebooks.general_module import timing_decorator, \
+                            reconstruct_cov_mat, \
+                            TruncatedBivariateNormal, \
+                            MultiVarJointDist, \
+                            Estimate, \
+                            Observation, \
+                            ZERO_APPROX
+except:
+    try:
+        from general_module import timing_decorator, \
+                            reconstruct_cov_mat, \
+                            TruncatedBivariateNormal, \
+                            MultiVarJointDist, \
+                            Estimate, \
+                            Observation, \
+                            ZERO_APPROX
+    except:
+        pass
+                            
+import numpy as np
+from scipy import integrate, optimize, stats
+from numba import jit, njit
+from numba_stats import norm, truncnorm
+
+# Wrap the minimize with a timer function
+timed_minimize = timing_decorator(optimize.minimize)
+timed_dblquad = timing_decorator(integrate.dblquad)
+
+@jit(nopython=True)
+def trunc_bivar_normal_pdf_numba(cls_instance: TruncatedBivariateNormal, x):
+    return cls_instance.pdf(x, False)
+
+@jit(nopython=True)
+def multivar_joint_dist_pdf_numba(cls_instance: MultiVarJointDist, x):
+        return np.exp(np.log(
+            stats.binom.pmf(cls_instance.n, cls_instance.t, cls_instance.p(x))
+        ) + np.log(
+            stats.multivariate_normal.pdf(x, mean=cls_instance.mu, cov=cls_instance.covar)
+        ))
+
+class SensorFilter1D:
+
+    class MultiVarJointDist1D:
+        """Internal 1-D joint distribution.
+        """
+        
+        def update_binom_params(self, n, f, t):
+            self.n = n
+            self.t = t
+            self.f = f
+
+        def p(self, x):
+            return x * self.f + (1 - x) * (1 - self.f)
+
+        def update_norm_params(self, mu, covar):
+            self.mu = float(mu)
+            self.covar = float(covar)
+
+        def normalize(self):
+            self.norm_const, _ = integrate.quad(
+                lambda x: self.pdf(x), 0.5+ZERO_APPROX, 1-ZERO_APPROX
+            )
+
+        def pdf(self, x):
+            """Compute the density value.
+
+            Note: the PDF is not normalized.
+            """
+            return np.exp(
+                self.logpdf(x)
+            )
+
+        def logpdf(self, x):
+            if type(x) == np.ndarray and len(x) > 1:
+                y = np.asarray([*map(float, x)])
+            else:
+                y = float(x)
+            return np.log(
+                stats.binom.pmf(self.n, self.t, self.p(y))
+            ) + np.log(
+                truncnorm.pdf(y, 0.5+ZERO_APPROX, 1-ZERO_APPROX, self.mu, self.covar)
+            )
+
+    class TruncatedNormal1D:
+        """Internal 1-D truncated normal distribution.
+        """
+        def __init__(self, mu=0, sigma=1, limit=[0.5+ZERO_APPROX, 1-ZERO_APPROX]):
+            self.mean = float(mu)
+            self.covar = float(sigma)
+            self.truncated_norm_const = 0
+            self.limit = [*map(float, limit)]
+
+        def update_params(self, mu, sigma):
+            self.mean = float(mu)
+            self.covar = float(sigma)
+
+        def pdf(self, x, normalized=True):
+            if type(x) == np.ndarray and len(x) > 1:
+                y = np.asarray([*map(float, x)])
+            else:
+                y = float(x)
+            return truncnorm.pdf(
+                y, self.limit[0], self.limit[1], self.mean, self.covar
+            ) if normalized else norm.pdf(
+                y, self.mean, self.covar
+            )
+
+
+    def __init__(self,
+                 a: float,
+                 r: float,
+                 limit = [0.5+ZERO_APPROX, 1-ZERO_APPROX]
+        ):
+
+        self.act_joint_dist = self.MultiVarJointDist1D()
+        self.est_posterior = self.TruncatedNormal1D(mu=0.5+ZERO_APPROX, sigma=1)
+        self.a = a
+        self.r = r
+        self.limit = limit
+
+    def degrade_quality(self, sensor_quality):
+        return self.a * sensor_quality
+
+    def neg_joint_dist_pdf(self, x):
+        return -self.act_joint_dist.pdf(x)
+
+    def kl_div(self, variance, surr_dist: TruncatedNormal1D, mu):
+        surr_dist.update_params(mu, variance)
+
+        divergence, _ = integrate.quad(
+            lambda x: surr_dist.pdf(x) * (
+                np.log(surr_dist.pdf(x)) - np.log(self.act_joint_dist.pdf(x)/self.act_joint_dist.norm_const)
+            ), *self.limit
+        )
+
+        return divergence
+    
+    def neg_ELBO(self, variance, surr_dist: TruncatedNormal1D, mu):
+        surr_dist.update_params(mu, variance)
+
+        elbo, _ = integrate.quad(
+            lambda x: surr_dist.pdf(x) * (
+                np.log(self.act_joint_dist.pdf(x)/surr_dist.pdf(x))
+            ), *self.limit
+        )
+
+        return -elbo
+
+    def grad_neg_ELBO(self, variance, surr_dist: TruncatedNormal1D, mu):
+        surr_dist.update_params(mu, variance)
+
+        inv_variance = 1/variance
+
+        grad_term = lambda x: inv_variance**2 * (x-mu)**2
+
+        # Note: surr_dist is already normalized, thanks to the numba_stats.truncnorm
+
+        factor = lambda x: np.log(self.act_joint_dist.pdf(x)/surr_dist.pdf(x)) - 1
+        term_1 = grad_term
+        term_2 = -integrate.quad(
+            lambda x: surr_dist.pdf(x) * grad_term(x), *self.limit
+        )[0]
+
+        grad_elbo = integrate.quad(
+            lambda x: surr_dist.pdf(x) * factor(x) * (term_1(x) + term_2), *self.limit
+        )[0] / 2
+
+        return -grad_elbo
+
+    def _predict(self, est: Estimate, elapsed_duration):
+        a = self.a ** elapsed_duration
+        return Estimate(a * est.x, a**2 * est.covar + self.r)
+
+    def _update(self, prediction: Estimate, obs: Observation, past_f):
+
+        # Update joint distribution values
+        self.act_joint_dist.update_binom_params(obs.n, past_f, obs.t)
+        self.act_joint_dist.update_norm_params(prediction.x, prediction.covar)
+        self.act_joint_dist.normalize()
+
+        print("debug n", self.act_joint_dist.n)
+        print("debug ACTUAL mu covar", self.act_joint_dist.mu, self.act_joint_dist.covar)
+
+        # Find MAP estimate for the mean
+        updated_mean_result = optimize.minimize(
+            self.neg_joint_dist_pdf,
+            prediction.x,
+            # method="L-BFGS-B",
+            # bounds=[self.limit]
+            method="SLSQP",
+            bounds=[self.limit]
+        )
+
+        if not updated_mean_result.success:
+            print(updated_mean_result)
+            raise RuntimeWarning("MAP estimation is unsuccessful")
+
+        # Find the variance
+        surrogate_dist = self.TruncatedNormal1D(self.est_posterior.mean, self.est_posterior.covar)
+
+        updated_var_result = timed_minimize(
+            self.neg_ELBO,
+            prediction.covar,
+            jac=self.grad_neg_ELBO,
+            args=(surrogate_dist, updated_mean_result.x),
+            method="SLSQP",
+            bounds=[(ZERO_APPROX, np.inf)]
+        )
+
+        if not updated_var_result.success:
+            print(updated_mean_result)
+            print(updated_var_result)
+            print(RuntimeWarning("Variance estimation is unsuccessful"))
+
+        print("debug SURROGATE mu covar", updated_mean_result.x, updated_var_result.x)
+        self.est_posterior.mean = surrogate_dist.mean
+        self.est_posterior.covar = surrogate_dist.covar
+
+        return (
+            updated_mean_result,
+            updated_var_result
+        )
+
+    def estimate(self, est: Estimate, obs: Observation, past_f, elapsed_duration):
+
+        est.x = est.x[0]
+        est.covar = est.covar[0]
+
+        prediction = self._predict(est, elapsed_duration)
+        mean_result, var_result = self._update(prediction, obs, past_f)
+
+        output = (
+            Estimate(
+                np.ones((2,1)) * mean_result.x,
+                np.ones((2,1)) * var_result.x
+            ),
+            (mean_result, var_result) # optimization output
+        )
+
+        return output
+
+
+class SensorFilter1DAlpha:
+    """Use the collective perception equation and modify f to use social estimate to update sensor accuracy
+    """
+
+    def __init__(self,
+                 limit = [0.5+ZERO_APPROX, 1-ZERO_APPROX]
+        ):
+        self.limit = limit
+
+    def _update(self, obs: Observation, soc_est):
+
+        num = (obs.n / obs.t + soc_est - 1.0)
+        denom = (2*soc_est - 1)
+
+        if num > denom: return 1.0
+        elif num < 0.0: return 0.0
+        else:
+            updated_mean_result = num / denom
+
+        return updated_mean_result
+
+    def estimate(self, est: Estimate, obs: Observation, soc_est):
+
+        est.x = est.x[0]
+        est.covar = est.covar[0]
+
+        mean_result = self._update(obs, soc_est)
+
+        output = (
+            Estimate(
+                np.ones((2,1)) * mean_result,
+                np.zeros((2,1))
+            ),
+            (mean_result) # optimization output
+        )
+
+        return output
+
+    pass
+
+
+
+class SensorFilter2D:
+
+    def __init__(self,
+                 A: np.ndarray,
+                 R: np.ndarray,
+                 limit_x = [ZERO_APPROX, 1-ZERO_APPROX],
+                 limit_y = [ZERO_APPROX, 1-ZERO_APPROX]
+        ):
+
+        self.act_joint_dist = MultiVarJointDist(dim=2)
+        self.est_posterior = TruncatedBivariateNormal(mu=[0.5, 0.5], sigma=np.eye(2)) # our approximation of the actual posterior
+        self.A = A # nominal sensor degradation model (state transition matrix)
+        self.R = R # nominal covariance for degradation model
+        self.limit_x = limit_x
+        self.limit_y = limit_y
+
+    def degrade_quality(self, sensor_quality):
+        return self.A @ sensor_quality
+
+    def neg_joint_dist_pdf(self, x):
+        """Negated density value of the joint density.
+
+        Can be used as the minimization cost to find the MAP estimate.
+
+        Args:
+            x: Support of the joint distribution.
+        """
+        return -multivar_joint_dist_pdf_numba(self.act_joint_dist, x) # the normalization constant isn't computed nor is it required
+
+    def neg_ELBO(
+            self,
+            C: np.ndarray,
+            surr_dist: TruncatedBivariateNormal,
+            mu,
+            diag_vals=None
+        ):
+        """Negated evidence lower bound.
+
+        Used as a minimization cost to estimate the sensor values.
+        This is written with a 2-D (2 sensor value) problem in mind.
+        """
+
+        cov = reconstruct_cov_mat(C, diag_vals)
+        surr_dist.update_params(mu, cov)
+
+        print("debug corr=", C, "diag_vals=", diag_vals, "cov=", cov)
+
+        surrogate_norm_const, _ = integrate.dblquad(
+            lambda x, y: trunc_bivar_normal_pdf_numba(
+                surr_dist,
+                np.array([x, y])
+            ), *self.limit_y, *self.limit_x
+        )
+
+        ln_expectation, _ = integrate.dblquad(
+            lambda x, y: trunc_bivar_normal_pdf_numba(surr_dist, np.array([x, y])) * 
+                        (
+                            np.log(multivar_joint_dist_pdf_numba(self.act_joint_dist, np.array([x, y]))) -
+                            np.log(trunc_bivar_normal_pdf_numba(surr_dist, np.array([x, y]))) +
+                            np.log(surrogate_norm_const)
+                        ), *self.limit_y, *self.limit_x
+        )
+        return -(ln_expectation)/surrogate_norm_const
+
+    def grad_neg_ELBO(
+            self,
+            C: np.ndarray,
+            surr_dist: TruncatedBivariateNormal,
+            mu,
+            diag_vals=None
+        ):
+        """Jacobian of the negative ELBO.
+        """
+        cov = reconstruct_cov_mat(C, diag_vals)
+        surr_dist.update_params(mu, cov)
+
+        surrogate_norm_const, _ = integrate.dblquad(
+            lambda x, y: trunc_bivar_normal_pdf_numba(
+                surr_dist,
+                np.array([x, y])
+            ), *self.limit_y, *self.limit_x
+        )
+
+        delta = lambda x, y: np.reshape(np.array([x, y]) - mu, (2,1)) # dim = 2x1
+        
+        inv_cov = np.linalg.inv(cov)
+
+        inv_norm_const = 1/surrogate_norm_const
+
+        # Define the term that arises from the gradient of the surrogate distribution (the surrogate distribution has been factored out)
+        grad_surr_dist_term_00 = lambda x, y: np.squeeze(inv_cov[[0], :] @ delta(x,y) @ delta(x,y).T @ inv_cov[:, [0]])
+        grad_surr_dist_term_01 = lambda x, y: np.squeeze(inv_cov[[0], :] @ delta(x,y) @ delta(x,y).T @ inv_cov[:, [1]])
+        grad_surr_dist_term_11 = lambda x, y: np.squeeze(inv_cov[[1], :] @ delta(x,y) @ delta(x,y).T @ inv_cov[:, [1]])
+        grad_surr_dist_term_arr = [
+            grad_surr_dist_term_00,
+            grad_surr_dist_term_01,
+            grad_surr_dist_term_11
+        ]
+
+        output = np.zeros(C.size)
+
+        if C.size == 2: indices = [[0,0], [1,1]]
+        elif C.size == 1: indices = [[0,1]]
+        else: indices = [[0,0], [1,1], [0,1]]
+
+        # Only iterate through upper triangular coefficients (because matrix is symmetric)
+        for ind, (i,j) in enumerate(indices):
+
+            factor = lambda x, y: \
+                    np.log(multivar_joint_dist_pdf_numba(self.act_joint_dist, np.array([x, y]))) + \
+                    0.5 * delta(x, y).T @ inv_cov @ delta(x, y) - 1 + \
+                    np.log(surrogate_norm_const)
+
+            term_1 = grad_surr_dist_term_arr[i+j]
+
+
+            term_2 = -inv_norm_const * integrate.dblquad(
+                lambda x, y: trunc_bivar_normal_pdf_numba(surr_dist, np.array([x, y])) *
+                    grad_surr_dist_term_arr[i+j](x, y), *self.limit_y, *self.limit_x
+            )[0]
+            
+            output[ind] = -0.5 * inv_norm_const *integrate.dblquad(
+                lambda x, y: trunc_bivar_normal_pdf_numba(surr_dist, np.array([x, y])) * \
+                    factor(x,y) * (term_1(x,y) + term_2), *self.limit_y, *self.limit_x
+            )[0]
+
+        return output
+
+    def pos_def_constraint(self, C, diag_vals=None):
+        """Constraint function to check for positive definiteness of covariance matrix.
+        """
+        cov = reconstruct_cov_mat(C, diag_vals)
+        
+        return (np.linalg.eigvals(cov) - np.array([1e-3, 1e-3])).ravel()
+    
+    def _predict(self, est: Estimate, elapsed_duration):
+        A = self.A ** elapsed_duration
+        return Estimate(A @ est.x, A @ est.covar @ A.T + self.R)
+
+    def _update(self, prediction: Estimate, obs: Observation, past_f):
+
+        # Update joint distribution values
+        self.act_joint_dist.update_binom_params(obs.n, past_f, obs.t)
+        self.act_joint_dist.update_norm_params(prediction.x, prediction.covar)
+        # self.act_joint_dist.compute_norm_const() # this isn't required for the ELBO computation
+
+        # Find MAP estimate for the mean
+        updated_mean_result = optimize.minimize(
+            self.neg_joint_dist_pdf,
+            prediction.x,
+            method="SLSQP",
+            bounds=[self.limit_x, self.limit_y]
+        )
+
+        if not updated_mean_result.success:
+            print(updated_mean_result)
+            raise RuntimeWarning("MAP estimation is unsuccessful")
+
+        # Find diagonal values of the covariance matrix
+        print("debug: initial covariance value", [prediction.covar[0,0], prediction.covar[1,1]])
+
+        surrogate_dist = TruncatedBivariateNormal()
+
+        updated_cov_diag_result = timed_minimize(
+            self.neg_ELBO,
+            [prediction.covar[0,0], prediction.covar[1,1]],
+            jac=self.grad_neg_ELBO,
+            args=(surrogate_dist, updated_mean_result.x, None),
+            method="SLSQP",
+            constraints={"type": "ineq", "fun": self.pos_def_constraint},
+            bounds=[*[(ZERO_APPROX, np.inf) for _ in range(2)]], # 2 variables: c_11, c_22
+            options={"eps": 1e-3, "disp": True}
+        )
+        
+        print(updated_cov_diag_result)
+
+        if not updated_cov_diag_result.success:
+            raise RuntimeWarning("Covariance diagonal estimation is unsuccessful")
+
+        # Find correlation (off-diagonal values) of the correlation matrix
+        print("debug: initial correlation value", prediction.covar[1,0] / np.sqrt(prediction.covar[0,0] * prediction.covar[1,1]))
+
+        updated_corr_result = timed_minimize(
+            self.neg_ELBO,
+            [prediction.covar[1,0] / np.sqrt(prediction.covar[0,0] * prediction.covar[1,1])],
+            jac=self.grad_neg_ELBO,
+            bounds=[(-(1 - 1e-6), 1 - 1e-6)],
+            args=(surrogate_dist, updated_mean_result.x, updated_cov_diag_result.x),
+            method="SLSQP",
+            constraints={
+                "type": "ineq",
+                "fun": self.pos_def_constraint,
+                "args": (updated_cov_diag_result.x,)
+            },
+        )
+
+        print(updated_corr_result)
+
+        if not updated_corr_result.success:
+            raise RuntimeWarning("Covariance correlation estimation is unsuccessful")
+
+        return (
+            updated_mean_result,
+            updated_cov_diag_result,
+            updated_corr_result
+        )
+
+    def estimate(self, est: Estimate, obs: Observation, past_f, elapsed_duration):
+
+        prediction = self._predict(est, elapsed_duration)
+
+        prediction.x = prediction.x.squeeze()
+        mean_result, cov_diag_result, cov_corr_result = self._update(prediction, obs, past_f)
+
+        output = (
+            Estimate(
+                mean_result.x.reshape((2,-1)),
+                reconstruct_cov_mat(cov_corr_result.x, cov_diag_result.x)
+            ),
+            (mean_result, cov_corr_result, cov_diag_result) # optimization output
+        )
+
+        return output
+
+
+
+class Environment:
+    
+    def __init__(self, fill_ratio):
+        self.dist = stats.bernoulli(fill_ratio)
+
+    def get_occurrences(self, n):
+        return self.dist.rvs(size=n)
+
+class MinimalisticCollectivePerception:
+
+    def __init__(self):
+        pass
+
+    def make_observation(self, occurrence: int, sensor_b: float, sensor_w: float):
+        """Make flawed observation based on occurrence.
+        """
+        if occurrence == 1: # black
+            return stats.bernoulli.rvs(p=sensor_b)
+        elif occurrence == 0: # white
+            return 1 - stats.bernoulli.rvs(p=sensor_w)
+
+    def local_estimate(self, obs: Observation, sensor_b: float, sensor_w: float):
+        """Local estimation of the fill ratio.
+
+        Returns:
+            x_hat: Local estimate.
+            alpha: Local confidence.
+        """
+
+        q = (sensor_b + sensor_w - 1.0) ** 2 # common term
+
+        if obs.n < 0 or obs.n > obs.t: raise RuntimeError("Observed values are erroneous")
+
+        if obs.n <= (1-sensor_w) * obs.t:
+            x_hat = 0.0
+            alpha = q * (obs.t * sensor_w**2 - (2 * sensor_w - 1.0) * obs.complement) / (sensor_w**2 * (sensor_w - 1.0)**2)
+        elif obs.n >= sensor_b * obs.t:
+            x_hat = 1.0
+            alpha = q * (obs.t * sensor_b**2 - 2 * obs.n * sensor_b + obs.n) / (sensor_b ** 2 * (sensor_b - 1.0)**2)
+        else:
+            x_hat = (obs.n / obs.t + sensor_w - 1.0) / np.sqrt(q)
+            alpha = q * obs.t**3 / (obs.n * obs.complement)
+
+        return x_hat, alpha
+    
+    def social_estimate(self, x_hat_arr: np.array, alpha_arr: np.array):
+        """Social estimation of the fill ratio.
+
+        Returns:
+            x_bar: Weighted average of neighbor estimates.
+            beta: Sum of neighbor confidences.
+        """
+        x_bar = np.average(x_hat_arr, weights=alpha_arr)
+        beta = sum(alpha_arr)
+
+        return x_bar, beta
+
+    def informed_estimate(self, x_hat, alpha, x_bar, beta):
+        """Informed estimation of the fill ratio.
+        """
+        return (alpha * x_hat + beta * x_bar) / (alpha + beta)
+
+class Robot(MinimalisticCollectivePerception):
+
+    """
+    This class is for the single robot that estimates its sensor degradation level
+    """
+
+    def __init__(self,
+                 A,
+                 R,
+                 act_sensor_quality: np.ndarray,
+                 est_sensor_quality_init: np.ndarray,
+                 est_sensor_quality_cov_init: np.ndarray):
+        
+        if type(A) == np.ndarray and A.size == 2:
+            self.sensor_filter = SensorFilter2D(A, R)
+        elif type(A) == float or type(A) == int:
+            self.sensor_filter = SensorFilter1D(A, R)
+        self.min_cp_solver = MinimalisticCollectivePerception()
+        self.act_sensor_quality = act_sensor_quality # [[sensor_b], [sensor_w]]
+        self.est_sensor_quality = Estimate(est_sensor_quality_init, est_sensor_quality_cov_init)
+
+        self.x_hat = 0.5
+        self.alpha = 0
+        self.x_bar = 0.5
+        self.beta = 0
+        self.x = 0.5
+        self.obs = Observation(0, 0)
+
+    def evolve_sensor_degradation(self):
+        self.act_sensor_quality = self.sensor_filter.degrade_quality(self.act_sensor_quality)
+
+    def compute_local_estimate(self, occurrence: int):
+        self.obs.n += super().make_observation(
+            occurrence,
+            self.act_sensor_quality[0,0], # observe with actual sensor qualitiy
+            self.act_sensor_quality[1,0]
+        )
+        self.obs.t += 1
+        self.obs.complement = self.obs.t - self.obs.n
+
+        self.x_hat, self.alpha = super().local_estimate(
+            self.obs,
+            self.est_sensor_quality.x[0,0], # estimate with estimated sensor quality
+            self.est_sensor_quality.x[1,0]
+        )
+
+    def compute_social_estimate(self, x_hat_arr: np.array, alpha_arr: np.array):
+        self.x_bar, self.beta = super().social_estimate(x_hat_arr, alpha_arr)
+
+    def compute_informed_estimate(self):
+        self.x = super().informed_estimate(self.x_hat, self.alpha, self.x_bar, self.beta)
+
+    def get_local_estimate(self):
+        return self.x_hat, self.alpha
+
+    def get_social_estimate(self):
+        return self.x_bar, self.beta
+
+    def get_informed_estimate(self):
+        return self.x
+
+    def run_sensor_degradation_filter(self, elapsed_duration):
+        self.est_sensor_quality, result = self.sensor_filter.estimate(
+            self.est_sensor_quality,
+            self.obs,
+            self.x,
+            elapsed_duration
+        )
+        return result
+    
+    def get_est_sensor_quality(self):
+        return self.est_sensor_quality
+    
+    def get_act_sensor_quality(self):
+        return self.act_sensor_quality
+    
+class RobotStaticDegradation(Robot):
+
+    """
+    This class is for the single robot that estimates its sensor degradation level while assuming it doesn't continue to degrade
+    """
+
+    def __init__(self,
+                 filter_type: str,
+                 act_sensor_quality: np.ndarray,
+                 est_sensor_quality_init: np.ndarray,
+                 est_sensor_quality_cov_init: np.ndarray):
+        
+        super().__init__(1, 1, act_sensor_quality, est_sensor_quality_init, est_sensor_quality_cov_init)
+
+        self.filter_type = filter_type
+        if filter_type == "ALPHA":
+            self.sensor_filter = SensorFilter1DAlpha()
+
+    def evolve_sensor_degradation(self):
+        pass # override: do nothing
+
+    def run_sensor_degradation_filter(self):
+        
+        if self.filter_type == "ALPHA":
+            self.est_sensor_quality, result = self.sensor_filter.estimate(
+                self.est_sensor_quality,
+                self.obs,
+                self.x_bar,
+            )
+
+        return result
+    
+    def get_est_sensor_quality(self):
+        return self.est_sensor_quality
+    
+    def get_act_sensor_quality(self):
+        return self.act_sensor_quality
