@@ -1,6 +1,7 @@
 import numpy as np
 import json
 import os
+import matplotlib.pyplot as plt
 
 class StaticDegradationJsonData:
 
@@ -103,4 +104,4 @@ class StaticDegradationJsonData:
                     [float(val) for val in elem.split(",")[2:4]] for elem in row
                 ] for row in data_str_vec
             ]
-        ) # the 4th element is the decision
+        ) # row = [local_est, social_est, informed_est, sensor_b_est, sensor_w_est]

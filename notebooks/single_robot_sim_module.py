@@ -245,8 +245,9 @@ class SensorFilter1DAlpha:
     """Use the collective perception equation and modify f to use social estimate to update sensor accuracy
     """
 
-    def __init__(self,
-                 limit = [0.5+ZERO_APPROX, 1-ZERO_APPROX]
+    def __init__(
+            self,
+            limit = [0.5+ZERO_APPROX, 1-ZERO_APPROX]
         ):
         self.limit = limit
 
