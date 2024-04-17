@@ -1,5 +1,4 @@
 import sim_module as sm
-import json
 import yaml
 import argparse
 # from joblib import Parallel, delayed
@@ -89,7 +88,7 @@ def main():
     create_simulation_folder(param_obj.suffix, curr_time)
 
     if args.p:
-        pass
+        raise NotImplementedError("Parallel mode not implemented yet.")
     else:
 
         for num_flawed_robots in param_obj.flawed_robot_range:

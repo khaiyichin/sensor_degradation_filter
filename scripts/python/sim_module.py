@@ -56,9 +56,15 @@ class SimParam:
         correct_sensor_acc_suffix = "_corb" + str(correct_b) + "_corw" + str(correct_w)
         comms_period_suffix = "_commsp" + str(self.comms_period)
         sensor_filter_period_suffix = "_filtp" + str(self.sensor_filter_period)
+        correct_filter_suffix = "_corfilt" + str(int(self.correct_robot_filter))
 
         self.suffix = "_t" + str(self.num_trials) + "_s" + str(self.num_steps) + "_tfr" + str(int(self.tfr * 1.0e3)) + \
-            flawed_robot_suffix + flawed_sensor_acc_suffix + correct_sensor_acc_suffix + comms_period_suffix + sensor_filter_period_suffix
+            flawed_robot_suffix + \
+            flawed_sensor_acc_suffix + \
+            correct_sensor_acc_suffix + \
+            comms_period_suffix + \
+            sensor_filter_period_suffix + \
+            correct_filter_suffix
 
 class MultiRobotSimStaticDegradation:
 
