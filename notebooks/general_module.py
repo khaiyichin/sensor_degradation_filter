@@ -88,10 +88,14 @@ class MultiVarJointDist(multivar.multi_rv_generic):
 # Define truncated bivariate normal distribution class
 class TruncatedBivariateNormal:
 
-    def __init__(self, mu, sigma):
+    def __init__(self, mu=0, sigma=1):
         self.mean = mu
         self.covar = sigma
         self.truncated_norm_const = 0
+
+    def update_params(self, mu, sigma):
+        self.mean = mu
+        self.covar = sigma
 
     def set_norm_const(self, nc): self.truncated_norm_const = nc
 
@@ -156,20 +160,35 @@ class ParamCombo:
         return np.allclose(matrix1, matrix2, atol=tol)
 
 # Reconstruct covariance matrix
-def reconstruct_cov_mat(C, diag_vals=None):
-    if C.size == 3 and diag_vals is None: # C contains the diagonal and off-diagonal terms
-        cov = np.diag(C[:2])
-        corr = C[2]
-        cov[0,1] = corr*np.sqrt(C[0]*C[1])
-        cov[1,0] = cov[0,1]
-    elif C.size == 2 and diag_vals is None: # C contains the diagonal terms
-        cov = np.diag(C)
-    elif C.size == 1 and diag_vals is not None: # C is the correlation
-        cov = np.diag(diag_vals)
-        cov[1,0] = C * np.sqrt(cov[0,0] * cov[1,1])
-        cov[0,1] = cov[1,0]
+def reconstruct_cov_mat(C, diag_vals=None, cholesky_decomposed=False):
+
+    if cholesky_decomposed:
+
+        if C.size == 3 and diag_vals is None:
+            L = np.diag(C[:2])
+            L[1,0] = C[2]
+        elif C.size == 2 and diag_vals is None:
+            L = np.diag(C)
+        elif C.size == 1 and diag_vals is not None:
+            L = np.diag(diag_vals)
+            L[1,0] = C
+
+        cov = L @ L.T
+
     else:
-        raise RuntimeError("Unknown input dimensions, C={0}, diag_vals={1}".format(C, diag_vals))
+        if C.size == 3 and diag_vals is None: # C contains the diagonal and off-diagonal terms
+            cov = np.diag(C[:2])
+            corr = C[2]
+            cov[0,1] = corr*np.sqrt(C[0]*C[1])
+            cov[1,0] = cov[0,1]
+        elif C.size == 2 and diag_vals is None: # C contains the diagonal terms
+            cov = np.diag(C)
+        elif C.size == 1 and diag_vals is not None: # C is the correlation
+            cov = np.diag(diag_vals)
+            cov[1,0] = C * np.sqrt(cov[0,0] * cov[1,1])
+            cov[0,1] = cov[1,0]
+        else:
+            raise RuntimeError("Unknown input dimensions, C={0}, diag_vals={1}".format(C, diag_vals))
 
     return cov
 

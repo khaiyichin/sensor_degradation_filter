@@ -280,10 +280,6 @@ class SensorFilter1DAlpha:
 
         return output
 
-    pass
-
-
-
 class SensorFilter2D:
 
     def __init__(self,
@@ -658,12 +654,16 @@ class RobotStaticDegradation(Robot):
                  filter_type: str,
                  act_sensor_quality: np.ndarray,
                  est_sensor_quality_init: np.ndarray,
-                 est_sensor_quality_cov_init: np.ndarray):
+                 est_sensor_quality_cov_init: np.ndarray,
+                 beta_BRAVO=0.0):
         
         super().__init__(1, 1, act_sensor_quality, est_sensor_quality_init, est_sensor_quality_cov_init)
 
         self.filter_type = filter_type
         if filter_type == "ALPHA":
+            self.sensor_filter = SensorFilter1DAlpha()
+        elif filter_type == "BRAVO":
+            self.type_2_err_prob = beta_BRAVO
             self.sensor_filter = SensorFilter1DAlpha()
 
     def evolve_sensor_degradation(self):
@@ -677,11 +677,43 @@ class RobotStaticDegradation(Robot):
                 self.obs,
                 self.x_bar,
             )
+        elif self.filter_type == "BRAVO":
+            run_filter = self.compute_decision_to_run_filter()
+
+            if (run_filter):
+                self.est_sensor_quality, result = self.sensor_filter.estimate(
+                    self.est_sensor_quality,
+                    self.obs,
+                    self.x_bar,
+                )
+            else:
+                result = -1
 
         return result
-    
+
+    def compute_social_estimate(self, x_hat_arr: np.array, alpha_arr: np.array):
+        super().compute_social_estimate(x_hat_arr, alpha_arr)
+
+        if self.filter_type == "BRAVO":
+            # Compute sample mean and sample variance
+            self.x_sample_mean = np.mean(x_hat_arr)
+            self.x_sample_std = np.sqrt(np.var(x_hat_arr, ddof=1))
+            self.num_neighbors = len(x_hat_arr)
+
     def get_est_sensor_quality(self):
         return self.est_sensor_quality
-    
+
     def get_act_sensor_quality(self):
         return self.act_sensor_quality
+
+    def compute_decision_to_run_filter(self):
+        score = stats.t.isf((1-self.type_2_err_prob) / 2, df=self.num_neighbors)
+
+        bounds = (self.x_hat - self.x_sample_std * (score / np.sqrt(self.num_neighbors) - 1.0),
+                  self.x_hat + self.x_sample_std * (score / np.sqrt(self.num_neighbors) - 1.0))
+        bounds = sorted(bounds)
+
+        lower_bound = bounds[0]
+        upper_bound = bounds[1]
+
+        return False if (self.x_sample_mean > lower_bound and self.x_sample_mean < upper_bound) else True
