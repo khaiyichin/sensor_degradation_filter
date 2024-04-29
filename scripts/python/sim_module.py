@@ -188,19 +188,19 @@ class MultiRobotSimStaticDegradation:
         local_est = [robot.get_local_estimate() for robot in self.robots]
 
         # Iterate through flawed robots to do social estimation
-        # for ind, robot in enumerate(self.flawed_robots):
-        for ind, robot in enumerate(self.robots):
+        if t % self.comms_period == 0:
+            for ind, robot in enumerate(self.robots):
 
-            # Select a random number of robots to communicate with from both the correct and flawed groups
-            selected_quantity = self.num_robots if self.fully_connected else self.num_neighbor_selection.rvs(size=1)
+                # Select a random number of robots to communicate with from both the correct and flawed groups
+                selected_quantity = self.num_robots if self.fully_connected else self.num_neighbor_selection.rvs(size=1)
 
-            x_hat_arr = ()
-            alpha_arr = ()
+                x_hat_arr = ()
+                alpha_arr = ()
 
-            if selected_quantity > 0:
-                indices = [i for i in range(self.num_robots) if i != ind] if self.fully_connected else np.random.randint(0, self.num_robots, selected_quantity)
-                x_hat_arr, alpha_arr = zip(*[est_conf_tuple for i, est_conf_tuple in enumerate(local_est) if i != ind and i in indices])
-                robot.compute_social_estimate(x_hat_arr, alpha_arr)
+                if selected_quantity > 0:
+                    indices = [i for i in range(self.num_robots) if i != ind] if self.fully_connected else np.random.randint(0, self.num_robots, selected_quantity)
+                    x_hat_arr, alpha_arr = zip(*[est_conf_tuple for i, est_conf_tuple in enumerate(local_est) if i != ind and i in indices])
+                    robot.compute_social_estimate(x_hat_arr, alpha_arr)
 
         # Do informed estimation
         [robot.compute_informed_estimate() for robot in self.robots]
