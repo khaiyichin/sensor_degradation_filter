@@ -26,6 +26,10 @@ class StaticDegradationJsonData:
         self.correct_sensor_acc_w = json_dict["correct_sensor_acc_w"]
         self.fully_connected = json_dict["fully_connected"]
         self.correct_robot_filter = json_dict["correct_robot_filter"]
+        try:
+            self.filter_specific_params = json_dict["filter_specific_params"]
+        except Exception as e:
+            self.filter_specific_params = None
 
     def print_common_data(self):
         print("num_trials:", self.num_trials)
@@ -40,6 +44,7 @@ class StaticDegradationJsonData:
         print("correct_sensor_acc_w:", self.correct_sensor_acc_w)
         print("fully_connected:", self.fully_connected)
         print("correct_robot_filter:", self.correct_robot_filter)
+        print("filter_specific_params:", self.filter_specific_params)
 
     def load_data(self, folder_path):
         """Load the JSON data from a given folder.

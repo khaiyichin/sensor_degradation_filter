@@ -655,7 +655,7 @@ class RobotStaticDegradation(Robot):
                  act_sensor_quality: np.ndarray,
                  est_sensor_quality_init: np.ndarray,
                  est_sensor_quality_cov_init: np.ndarray,
-                 beta_BRAVO=0.0):
+                 filter_params=[]):
         
         super().__init__(1, 1, act_sensor_quality, est_sensor_quality_init, est_sensor_quality_cov_init)
 
@@ -663,7 +663,7 @@ class RobotStaticDegradation(Robot):
         if filter_type == "ALPHA":
             self.sensor_filter = SensorFilter1DAlpha()
         elif filter_type == "BRAVO":
-            self.type_2_err_prob = beta_BRAVO
+            self.type_2_err_prob = filter_params[0]
             self.sensor_filter = SensorFilter1DAlpha()
 
     def evolve_sensor_degradation(self):
@@ -709,11 +709,6 @@ class RobotStaticDegradation(Robot):
     def compute_decision_to_run_filter(self):
         score = stats.t.isf((1-self.type_2_err_prob) / 2, df=self.num_neighbors)
 
-        bounds = (self.x_hat - self.x_sample_std * (score / np.sqrt(self.num_neighbors) - 1.0),
-                  self.x_hat + self.x_sample_std * (score / np.sqrt(self.num_neighbors) - 1.0))
-        bounds = sorted(bounds)
-
-        lower_bound = bounds[0]
-        upper_bound = bounds[1]
-
+        lower_bound = self.x_hat - self.x_sample_std * (score / np.sqrt(self.num_neighbors) + 1.0)
+        upper_bound = self.x_hat + self.x_sample_std * (score / np.sqrt(self.num_neighbors) + 1.0)
         return False if (self.x_sample_mean > lower_bound and self.x_sample_mean < upper_bound) else True

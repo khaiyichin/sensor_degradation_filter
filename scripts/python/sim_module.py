@@ -24,6 +24,8 @@ class SimParam:
         self.fully_connected = bool(yaml_config["fullyConnected"])
         self.method = str(yaml_config["method"])
         self.correct_robot_filter = bool(yaml_config["correctFilter"])
+        if (yaml_config["filterSpecificParams"]):
+            self.filter_specific_params = yaml_config["filterSpecificParams"]
 
         # Flawed robot range
         flawed_robots_min = int(yaml_config["flawedRobotRange"]["min"])
@@ -84,6 +86,12 @@ class MultiRobotSimStaticDegradation:
         self.fully_connected = param.fully_connected
         self.method = param.method
         self.correct_robot_filter = param.correct_robot_filter
+        self.filter_specific_params = param.filter_specific_params
+
+        if self.method == "BRAVO":
+            self.filter_specific_params_lst = [float(param.filter_specific_params["type2ErrProb"])]
+        else:
+            self.filter_specific_params_lst = [-1.0]
 
         self.num_flawed_robots = num_flawed_robots
         self.trial_ind = trial_ind
@@ -107,6 +115,7 @@ class MultiRobotSimStaticDegradation:
             "method": self.method,
             "trial_ind": self.trial_ind,
             "correct_robot_filter": self.correct_robot_filter,
+            "filter_specific_params": self.filter_specific_params,
             "data_str": []
         }
 
@@ -134,7 +143,8 @@ class MultiRobotSimStaticDegradation:
                     param.method,
                     np.array([[self.act_b],[self.act_w]]),
                     np.array([[self.act_b],[self.act_w]]),
-                    np.array([[self.sensor_cov],[self.sensor_cov]])
+                    np.array([[self.sensor_cov],[self.sensor_cov]]),
+                    self.filter_specific_params_lst
                 ) for _ in range(self.num_correct_robots)
             ]
         self.flawed_robots = [
@@ -142,7 +152,8 @@ class MultiRobotSimStaticDegradation:
                 param.method,
                 np.array([[self.act_b],[self.act_w]]),
                 np.array([[self.init_b],[self.init_w]]), # assuming that we know what it starts out very well
-                np.array([[self.sensor_cov],[self.sensor_cov]])
+                np.array([[self.sensor_cov],[self.sensor_cov]]),
+                self.filter_specific_params_lst
             ) for _ in range(self.num_flawed_robots)
         ]
         self.robots = self.correct_robots + self.flawed_robots # flawed robots are appended at the back
