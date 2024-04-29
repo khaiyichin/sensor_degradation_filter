@@ -76,6 +76,7 @@ def main():
     parser = argparse.ArgumentParser(description="Execute multi-agent simulation with static topologies and static degradation.")
     parser.add_argument("FILE", type=str, help="path to the parameter file relative to the current/execution directory")
     parser.add_argument("-p", action="store_true", help="flag to use cores to run simulations in parallel")
+    parser.add_argument("--verbose", action="store_true", help="flag to run with verbose output")
     args = parser.parse_args()
 
     # Obtain timestamp
@@ -92,11 +93,11 @@ def main():
     else:
 
         for num_flawed_robots in param_obj.flawed_robot_range:
-            print("\nRunning case with # flawed robots = " + str(num_flawed_robots))
+            if args.verbose: print("\nRunning case with # flawed robots = " + str(num_flawed_robots))
 
             for trial in range(param_obj.num_trials):
                 start = timeit.default_timer()
-                print("\tRunning trial number = " + str(trial) + "... ", end="")
+                if args.verbose: print("\tRunning trial number = " + str(trial) + "... ", end="")
                 sys.stdout.flush()
 
                 s = sm.MultiRobotSimStaticDegradation(param_obj, trial, num_flawed_robots)
@@ -104,13 +105,13 @@ def main():
                 s.run()
 
                 # Write data to JSON file
-                s.save_data()
+                if args.verbose: s.save_data()
 
                 print("Done!\n")
 
                 end = timeit.default_timer()
 
-                print("\t-- Elapsed time:", end-start, "--\n")
+                if args.verbose: print("\t-- Elapsed time:", end-start, "--\n")
 
 if __name__ == "__main__":
     

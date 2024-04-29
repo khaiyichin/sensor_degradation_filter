@@ -15,6 +15,8 @@ sensorFilterPeriod: 2.5e+2 # in units of observation rounds
 numSteps: 1.0e+3 # number of steps (each observation is made per step)
 numTrials: 2 # number of trials to repeat for each parameter
 fullyConnected: True # whether to use a fully connected network or select neighbors using a right-skewed binomial distribution
-method: "ALPHA" # sensor filter method
-correctFilter: True # run the filter for robots that have the correct initial accuracy
+method: "BRAVO" # sensor filter method
+filterSpecificParams:
+  type2ErrProb: 0.1
+correctFilter: False # run the filter for robots that have the correct initial accuracy
 ...
