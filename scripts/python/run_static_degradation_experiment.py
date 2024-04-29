@@ -105,9 +105,9 @@ def main():
                 s.run()
 
                 # Write data to JSON file
-                if args.verbose: s.save_data()
+                s.save_data()
 
-                print("Done!\n")
+                if args.verbose: print("Done!\n")
 
                 end = timeit.default_timer()
 
