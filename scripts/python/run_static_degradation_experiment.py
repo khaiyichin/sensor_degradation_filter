@@ -1,4 +1,6 @@
-import sim_module as sm
+#!/usr/bin/env python3
+
+import scripts.python.sim_module as sm
 import yaml
 import argparse
 # from joblib import Parallel, delayed

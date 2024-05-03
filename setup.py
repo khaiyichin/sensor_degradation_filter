@@ -1,8 +1,5 @@
 import setuptools
 
-print("pkgs", setuptools.find_packages())
-
-
 setuptools.setup(
     name="sensor_degradation_filter_py",
     version="1.0.0",
@@ -10,6 +7,8 @@ setuptools.setup(
     author="Khai Yi Chin",
     author_email="khaiyichin@gmail.com",
     url="https://github.com/khaiyichin/sensor-degradation-filter",
-    packages=setuptools.find_packages(),
-    scripts=[]
+    packages=["notebooks", "scripts.python"],
+    scripts=[
+        "scripts/python/run_static_degradation_experiment.py"
+    ]
 )
