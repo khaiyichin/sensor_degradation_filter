@@ -6,7 +6,6 @@ import json
 
 class SimParam:
 
-
     def __init__(self, yaml_config):
 
         # Common parameters

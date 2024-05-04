@@ -9,6 +9,7 @@ setuptools.setup(
     url="https://github.com/khaiyichin/sensor-degradation-filter",
     packages=["notebooks", "scripts.python"],
     scripts=[
-        "scripts/python/run_static_degradation_experiment.py"
+        "scripts/python/run_static_degradation_experiment.py",
+        "scripts/python/extract_convergence_accuracy_data.py"
     ]
 )
