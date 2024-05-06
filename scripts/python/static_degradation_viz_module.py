@@ -271,12 +271,18 @@ def plot_scatter(df: pd.DataFrame, varying_metric_str: str, **kwargs):
     # Process keyword arguments
     leg_title = varying_metric_str if "leg_title" not in kwargs else kwargs["leg_title"]
 
-    fig_size = (8, 6)
-    fig, ax = plt.subplots(
-        tight_layout=True,
-        figsize=fig_size,
-        dpi=200
-    )
+    fig = []
+    ax = []
+
+    if "ax" not in kwargs:
+        fig_size = (8, 6)
+        fig, ax = plt.subplots(
+            tight_layout=True,
+            figsize=fig_size,
+            dpi=200
+        )
+    else:
+        ax = kwargs["ax"]
 
     # Get performance metrics for all trials
     conv_min = np.inf
@@ -329,7 +335,6 @@ def plot_scatter(df: pd.DataFrame, varying_metric_str: str, **kwargs):
     scatter_x, scatter_y = list(zip(*median_lst))
 
     ax.scatter(
-        # list(zip(*median_lst)),
         scatter_x,
         scatter_y,
         c=range(0, len(median_lst)),
@@ -337,32 +342,46 @@ def plot_scatter(df: pd.DataFrame, varying_metric_str: str, **kwargs):
         cmap="winter",
         vmin=0,
         vmax=len(varying_metric_vals) - 1,
+        marker="o" if "marker" not in kwargs else kwargs["marker"],
         alpha=1.0,
         s=65
     )
 
     # Add legend
-    legend_elements = [
-        mlines.Line2D(
-            [], [],
-            markersize=8,
-            marker='o',
-            linestyle="",
-            label="{0}".format(val),
-            markeredgecolor="k",
-            markerfacecolor=plt.cm.winter(ind/(len(varying_metric_vals)-1))
-        ) for ind, val in enumerate(varying_metric_vals)
-    ]
-    ax.legend(handles=legend_elements, title=leg_title, loc='upper right')
+    legend_elements = []
+
+    if "use_leg_patch" in kwargs and kwargs["use_leg_patch"]:
+        legend_elements = [
+            Patch(
+                label="{0}".format(val),
+                facecolor=plt.cm.winter(ind/(len(varying_metric_vals)-1))
+            ) for ind, val in enumerate(varying_metric_vals)
+        ]
+    else:
+        legend_elements = [
+            mlines.Line2D(
+                [], [],
+                markersize=8,
+                marker="o" if "marker" not in kwargs else kwargs["marker"],
+                linestyle="",
+                label="{0}".format(val),
+                markeredgecolor="k",
+                markerfacecolor=plt.cm.winter(ind/(len(varying_metric_vals)-1))
+            ) for ind, val in enumerate(varying_metric_vals)
+        ]
+
+    ax.legend(handles=legend_elements, title=leg_title, loc="upper right")
 
     # Set limits
     ax.set_xlabel("Time Steps", fontsize=14)
     ax.set_ylabel("Absolute Error", fontsize=14)
-    ax.set_xlim(-0.02 * df["num_steps"][0], 0.52 * df["num_steps"][0])
-    ax.set_ylim(-0.005, 0.1)
+    ax.set_xlim(-0.02 * df["num_steps"][0], 1.02 * df["num_steps"][0])
+    ax.set_ylim(-0.05, 1.0)
 
     # Add grid
-    ax.grid()
+    ax.grid("on")
 
     print("Convergence timestep minimum: {0}, maximum: {1}".format(conv_min, conv_max))
     print("Accuracy error minimum: {0}, maximum: {1}".format(acc_min, acc_max))
+
+    return fig, ax
