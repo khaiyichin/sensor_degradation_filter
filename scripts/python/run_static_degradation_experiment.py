@@ -3,7 +3,7 @@
 import scripts.python.sim_module as sm
 import yaml
 import argparse
-# from joblib import Parallel, delayed
+from joblib import Parallel, delayed
 from datetime import datetime
 import timeit
 import os
@@ -74,6 +74,12 @@ def create_simulation_folder(suffix, curr_time):
         except Exception:
             pass
 
+def run_num_flawed_robots_parallel(param_obj, num_flawed_robots):
+    for trial in range(param_obj.num_trials):
+        s = sm.MultiRobotSimStaticDegradation(param_obj, trial, num_flawed_robots)
+        s.run()
+        s.save_data()
+
 def main():
     parser = argparse.ArgumentParser(description="Execute multi-agent simulation with static topologies and static degradation.")
     parser.add_argument("FILE", type=str, help="path to the parameter file relative to the current/execution directory")
@@ -90,15 +96,19 @@ def main():
     # Create a folder to store simulation data
     create_simulation_folder(param_obj.suffix, curr_time)
 
+    start = timeit.default_timer()
+
     if args.p:
-        raise NotImplementedError("Parallel mode not implemented yet.")
+        if args.verbose: print("\nRunning experiments in parallel")
+        Parallel(n_jobs=-1, verbose=100 if args.verbose else 0)(
+            delayed(run_num_flawed_robots_parallel)(param_obj, num_flawed_robots) for num_flawed_robots in param_obj.flawed_robot_range
+        )
     else:
 
         for num_flawed_robots in param_obj.flawed_robot_range:
             if args.verbose: print("\nRunning case with # flawed robots = " + str(num_flawed_robots))
 
             for trial in range(param_obj.num_trials):
-                start = timeit.default_timer()
                 if args.verbose: print("\tRunning trial number = " + str(trial) + "... ", end="")
                 sys.stdout.flush()
 
@@ -111,11 +121,10 @@ def main():
 
                 if args.verbose: print("Done!\n")
 
-                end = timeit.default_timer()
+    end = timeit.default_timer()
 
-                if args.verbose: print("\t-- Elapsed time:", end-start, "--\n")
+    print("\t-- Elapsed time:", end-start, "s --\n")
 
 if __name__ == "__main__":
-    
     main()
     print("success")
