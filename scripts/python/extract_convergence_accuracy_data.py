@@ -5,11 +5,13 @@ import os
 import pandas as pd
 import argparse
 import warnings
+import timeit
+import sys
 
 """Saving numpy arrays in HDF files will give a performance warning, so ignoring it"""
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 
-def load_data(folder_path):
+def load_data(args):
     """Load the JSON data from a given folder.
 
     Args:
@@ -18,33 +20,52 @@ def load_data(folder_path):
     json_data_lst = []
 
     # Receive folder path
-    for root, _, files in os.walk(folder_path):
+    for root, _, files in os.walk(args.FOLDER):
 
         if not files: continue # no files detected (perhaps only folders)
         else:
             json_files = [filename.endswith(".json") for filename in files]
             if any(json_files):
-                print("Creating a StaticDegradationJsonData object for {0} JSON files in folder={1}...".format(len(json_files), root), end=" ")
+                if args.verbose:
+                    print("Creating a StaticDegradationJsonData object for {0} JSON files in folder={1}...".format(len(json_files), root), end=" ")
+                    sys.stdout.flush()
+
                 json_data_lst.append(sdvm.StaticDegradationJsonData(root))
-                print("Done!\n")
+
+                if args.verbose: print("Done!\n")
             else:
                 continue
 
     return json_data_lst
 
-def save_to_h5(json_data_lst, convergence_threshold, output_filename, data_key="df"):
+def save_to_h5(json_data_lst, args):
     df = pd.DataFrame()
 
-    for d in json_data_lst:
-        df = sdvm.process_convergence_accuracy(d, df, convergence_threshold)
+    for i, d in enumerate(json_data_lst):
+        if args.verbose:
+            print("Processing data for convergence and accuracy values {0}/{1}...".format(i+1, len(json_data_lst)), end=" ")
+            sys.stdout.flush()
 
-    df.to_hdf(output_filename, key=data_key)
+        df = sdvm.process_convergence_accuracy(d, df, args.THRESH)
 
-    print("Stored data as {0} with key \"{1}\"".format(os.path.join(os.getcwd(), output_filename), data_key))
+        if args.verbose: print("Done!\n")
+
+    df.to_hdf(args.output, key="df" if not args.key else args.key)
+
+    print("Stored data as {0} with key \"{1}\"".format(os.path.join(os.getcwd(), args.output), "df" if not args.key else args.key))
 
 def main(args):
-    json_data_lst = load_data(args.FOLDER)
-    save_to_h5(json_data_lst, args.THRESH, args.output, args.key)
+    start = None
+    if args.verbose: start = timeit.default_timer()
+
+    json_data_lst = load_data(args)
+    if json_data_lst: save_to_h5(json_data_lst, args)
+    else: print("No JSON files found.")
+
+    if args.verbose:
+        end = timeit.default_timer()
+
+        print("\t-- Elapsed time:", end-start, "s --\n")
 
 if __name__ == "__main__":
 
@@ -52,7 +73,8 @@ if __name__ == "__main__":
     parser.add_argument("FOLDER", type=str, help="path to the folder containing all the JSON data files; the files can be several levels deep")
     parser.add_argument("THRESH", type=float, help="threshold to assess convergence point")
     parser.add_argument("--output", default="conv_acc_data.h5", type=str, help="output filename (default: conv_acc_data.h5)")
-    parser.add_argument("--key", default="df", help="dictionary key when storing the Pandas DataFrame")
+    parser.add_argument("--key", default="df", help="dictionary key when storing the Pandas DataFrame (default: \"df\")")
+    parser.add_argument("--verbose", action="store_true", help="flag to run with verbose output")
 
     args = parser.parse_args()
 

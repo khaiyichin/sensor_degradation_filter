@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 from matplotlib.patches import Ellipse
 import scipy.stats as stats
+import multiprocessing
 
 class StaticDegradationJsonData:
     """
@@ -219,21 +220,32 @@ def detect_convergence(
             if running_ind == len(curve): # found it or it's the last point
                 return ref_ind
 
-    # Go through all the curves (which contain all robots' informed estimates in all the trials)
-    conv_ind_lst = [None for _ in range(curves_ndarr.shape[0])] # go through each trial
+        return ref_ind # this happens when NaN values wrap the tail end of the curve
 
-    for trial_ind, rob_curves_per_trial in enumerate(curves_ndarr):
-        conv_ind_lst[trial_ind] = Parallel(
+    def parallel_find_convergence_point_trial(trial_ind, rob_curves_per_trial):
+
+        conv = Parallel(
             n_jobs=-1,
             verbose=0
-        )(delayed(parallel_find_convergence_point)(c) for c in rob_curves_per_trial) # rob_curves_per_trial has shape (num_steps+1, 1)
+        )(delayed(parallel_find_convergence_point)(c) for c in rob_curves_per_trial) # rob_curves_per_trial has shape (num_robots, num_steps+1); this runs num_robots curves in parallel
+
+        return conv
+
+    conv_ind_lst = []
+
+    # Check to see if any cores are leftover so that we emphasize parallel execution in the lower level
+    leftover_cores = multiprocessing.cpu_count() // curves_ndarr.shape[1]
+
+    conv_ind_lst = Parallel(n_jobs=leftover_cores if leftover_cores > 0 else 1, verbose=0)(
+        delayed(parallel_find_convergence_point_trial)(trial_ind, rob_curves_per_trial) for trial_ind, rob_curves_per_trial in enumerate(curves_ndarr)
+    )
 
     return conv_ind_lst
 
 def compute_accuracy(
     target_fill_ratio,
     curves_ndarr: np.ndarray, # dim = (num_trials, num_robots, num_steps+1)
-    conv_ind_lst: list # dim = (num_trials, num_agents)
+    conv_ind_lst: list # dim = (num_trials, num_robots)
 ) -> list:
     """Compute the informed estimate accuracy with respect to the target fill ratio.
 
