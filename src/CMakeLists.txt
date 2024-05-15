@@ -1,17 +1,6 @@
+add_subdirectory(algorithms)
 add_subdirectory(controllers)
 add_subdirectory(loop_functions)
-
-# Add collective perception library
-add_library(collective_perception
-    SHARED
-    CollectivePerceptionAlgorithm.cpp
-    Arena.cpp
-)
-
-target_include_directories(collective_perception
-    PRIVATE
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/${PROJECT_NAME}>
-)
 
 # Add executable to start simulation
 add_executable(run_dynamic_topo_simulations run_dynamic_topo_simulations.cpp)

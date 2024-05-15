@@ -1,16 +1,16 @@
 
 # Add controller library
-add_library(kheperaiv_static_deg
+add_library(${PROJECT_NAME}_controllers
     SHARED
     KheperaIVStaticDeg.cpp
 )
 
-target_link_libraries(kheperaiv_static_deg
+target_link_libraries(${PROJECT_NAME}_controllers
     PRIVATE
-    collective_perception
+    ${PROJECT_NAME}_algorithms
 )
 
-target_include_directories(kheperaiv_static_deg
+target_include_directories(${PROJECT_NAME}_controllers
     PRIVATE
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/${PROJECT_NAME}>
 )

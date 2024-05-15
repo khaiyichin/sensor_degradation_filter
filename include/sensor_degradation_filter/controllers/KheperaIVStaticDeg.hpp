@@ -12,7 +12,8 @@
 
 #include <unordered_map>
 
-#include "CollectivePerceptionAlgorithm.hpp"
+#include "algorithms/CollectivePerception.hpp"
+#include "algorithms/SensorDegradationFilter.hpp"
 
 using namespace argos;
 
@@ -96,13 +97,13 @@ public:
 
     CommsParams GetCommsParams() const { return comms_params_; }
 
-    CollectivePerceptionAlgorithm::Params GetCollectivePerceptionParams() const { return collective_perception_params_; }
+    CollectivePerception::Params GetCollectivePerceptionParams() const { return *collective_perception_params_ptr_; }
 
     std::vector<Real> GetData() const;
 
     void UpdateAssumedSensorAcc(const std::unordered_map<std::string, Real> &updated_accuracies_map, const bool &initial = false)
     {
-        collective_perception_params_.AssumedSensorAcc = updated_accuracies_map;
+        collective_perception_params_ptr_->AssumedSensorAcc = updated_accuracies_map;
 
         if (initial)
         {
@@ -157,9 +158,11 @@ protected:
     CommsParams comms_params_;
 
     /* Collective perception algorithm */
-    CollectivePerceptionAlgorithm collective_perception_algo_;
+    std::shared_ptr<CollectivePerception> collective_perception_algo_ptr_;
 
-    CollectivePerceptionAlgorithm::Params collective_perception_params_;
+    std::shared_ptr<CollectivePerception::Params> collective_perception_params_ptr_;
+
+    std::shared_ptr<SensorDegradationFilter> filter_ptr_;
 
     UInt64 tick_counter_ = 0;
 

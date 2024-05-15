@@ -1,5 +1,5 @@
-#ifndef COLLECTIVE_PERCEPTION_ALGORITHM_HPP
-#define COLLECTIVE_PERCEPTION_ALGORITHM_HPP
+#ifndef COLLECTIVE_PERCEPTION_HPP
+#define COLLECTIVE_PERCEPTION_HPP
 
 #include <string>
 #include <vector>
@@ -7,7 +7,7 @@
 #include <numeric>
 #include <unordered_map>
 
-class CollectivePerceptionAlgorithm
+class CollectivePerception
 {
 public:
     struct EstConfPair
@@ -58,7 +58,7 @@ public:
         std::unordered_map<std::string, double> AssumedSensorAcc = {{"b", -1.0}, {"w", -1.0}};
     };
 
-    CollectivePerceptionAlgorithm() {}
+    CollectivePerception() {}
 
     void ComputeLocalEstimate(const Params &params);
 
@@ -66,18 +66,18 @@ public:
 
     void ComputeInformedEstimate();
 
-    EstConfPair GetLocalVals() const { return LocalVals; }
+    EstConfPair GetLocalVals() const { return local_vals_; }
 
-    EstConfPair GetSocialVals() const { return SocialVals; }
+    EstConfPair GetSocialVals() const { return social_vals_; }
 
-    EstConfPair GetInformedVals() const { return InformedVals; }
+    EstConfPair GetInformedVals() const { return informed_vals_; }
 
 private:
-    EstConfPair LocalVals; ///< Local values
+    EstConfPair local_vals_; ///< Local values
 
-    EstConfPair SocialVals; ///< Social values
+    EstConfPair social_vals_; ///< Social values
 
-    EstConfPair InformedVals; ///< Informed values
+    EstConfPair informed_vals_; ///< Informed values
 };
 
 #endif
