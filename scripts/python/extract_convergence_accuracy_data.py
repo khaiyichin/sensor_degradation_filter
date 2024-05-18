@@ -41,31 +41,31 @@ def load_data(args):
 def save_to_h5(json_data_lst, args):
     df = pd.DataFrame()
 
+    start = None
+
     for i, d in enumerate(json_data_lst):
         if args.verbose:
+            start = timeit.default_timer()
             print("Processing data for convergence and accuracy values {0}/{1}...".format(i+1, len(json_data_lst)), end=" ")
             sys.stdout.flush()
 
         df = sdvm.process_convergence_accuracy(d, df, args.THRESH)
 
-        if args.verbose: print("Done!\n")
+        if args.verbose:
+            print("Done!")
+            end = timeit.default_timer()
+            print("\t-- Elapsed time:", end-start, "s --\n")
 
     df.to_hdf(args.output, key="df" if not args.key else args.key)
 
     print("Stored data as {0} with key \"{1}\"".format(os.path.join(os.getcwd(), args.output), "df" if not args.key else args.key))
 
 def main(args):
-    start = None
-    if args.verbose: start = timeit.default_timer()
 
     json_data_lst = load_data(args)
     if json_data_lst: save_to_h5(json_data_lst, args)
     else: print("No JSON files found.")
 
-    if args.verbose:
-        end = timeit.default_timer()
-
-        print("\t-- Elapsed time:", end-start, "s --\n")
 
 if __name__ == "__main__":
 

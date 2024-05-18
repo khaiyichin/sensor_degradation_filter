@@ -204,40 +204,31 @@ def detect_convergence(
     curves_ndarr: np.ndarray # dim = (num_trials, num_robots, num_steps+1)
 ) -> list:
 
-    # Define local function used for processing the inner for loop in parallel
-    def parallel_find_convergence_point(curve):
+    def parallel_find_convergence_point_trial(trial_ind, robot_curves_per_trial):
+        ref_ind_lst = [len(robot_curves_per_trial[0])-1 for _ in range(len(robot_curves_per_trial))]
 
-        # Iterate through each point in the curve as reference
-        for ref_ind, ref in enumerate(curve):
+        # Iterate through each robot's curve
+        for robot_ind, curve in enumerate(robot_curves_per_trial):
 
-            running_ind = ref_ind
+            # Iterate through each point in the curve
+            for curve_ind, curve_val in enumerate(curve[:-1]):
+                # Specify evaluation region, i.e., all points to the right of the current point
+                evaluation_region = curve[curve_ind+1:]
 
-            # Compute the difference between the reference point and each of the points following it
-            while ( running_ind < len(curve) ) and ( abs(ref - curve[running_ind]) < conv_threshold ): running_ind += 1
+                # Compute the upper and lower limits for the current point
+                val_lower_limit = curve_val - conv_threshold
+                val_upper_limit = curve_val + conv_threshold
 
-            # Return the reference point index
-            # True only if convergence is early or the entire curve has been traversed, which means the index of the last point is used
-            if running_ind == len(curve): # found it or it's the last point
-                return ref_ind
+                # Check if all points in the evaluation region falls within the upper and lower limit of the current point
+                if np.min(evaluation_region) > val_lower_limit and np.max(evaluation_region) < val_upper_limit:
+                    ref_ind_lst[robot_ind] = curve_ind
+                    break
 
-        return ref_ind # this happens when NaN values wrap the tail end of the curve
+        return ref_ind_lst
 
-    def parallel_find_convergence_point_trial(trial_ind, rob_curves_per_trial):
-
-        conv = Parallel(
-            n_jobs=-1,
-            verbose=0
-        )(delayed(parallel_find_convergence_point)(c) for c in rob_curves_per_trial) # rob_curves_per_trial has shape (num_robots, num_steps+1); this runs num_robots curves in parallel
-
-        return conv
-
-    conv_ind_lst = []
-
-    # Check to see if any cores are leftover so that we emphasize parallel execution in the lower level
-    leftover_cores = multiprocessing.cpu_count() // curves_ndarr.shape[1]
-
-    conv_ind_lst = Parallel(n_jobs=leftover_cores if leftover_cores > 0 else 1, verbose=0)(
-        delayed(parallel_find_convergence_point_trial)(trial_ind, rob_curves_per_trial) for trial_ind, rob_curves_per_trial in enumerate(curves_ndarr)
+    # Run each trial in parallel
+    conv_ind_lst = Parallel(n_jobs=-1, verbose=0)(
+        delayed(parallel_find_convergence_point_trial)(trial_ind, robot_curves_per_trial) for trial_ind, robot_curves_per_trial in enumerate(curves_ndarr)
     )
 
     return conv_ind_lst
@@ -262,9 +253,9 @@ def compute_accuracy(
     acc_lst = [None for _ in range(curves_ndarr.shape[0])]
 
     # Iterate through each trial to obtain the accuracy based on the provided convergence index
-    for trial_ind, rob_curves_per_trial in enumerate(curves_ndarr):
+    for trial_ind, robot_curves_per_trial in enumerate(curves_ndarr):
         err = [
-            abs(rob_curves_per_trial[robot_ind, conv_ind] - target_fill_ratio)
+            abs(robot_curves_per_trial[robot_ind, conv_ind] - target_fill_ratio)
                     for robot_ind, conv_ind in enumerate(conv_ind_lst[trial_ind])
         ] # err is a list with num_robots elements
 
