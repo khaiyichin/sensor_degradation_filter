@@ -1,37 +1,37 @@
 #include "algorithms/CollectivePerception.hpp"
 
-void CollectivePerception::ComputeLocalEstimate(const Params &params)
+void CollectivePerception::ComputeLocalEstimate(const double &sensor_acc_b, const double &sensor_acc_w)
 {
-    double h = static_cast<double>(params.NumBlackTilesSeen);
-    double t = static_cast<double>(params.NumObservations);
+    double h = static_cast<double>(params_ptr_->NumBlackTilesSeen);
+    double t = static_cast<double>(params_ptr_->NumObservations);
 
-    if ((params.AssumedSensorAcc.at("b") == 1.0) && (params.AssumedSensorAcc.at("w") == 1.0)) // perfect sensor
+    if ((sensor_acc_b == 1.0) && (sensor_acc_w == 1.0)) // perfect sensor
     {
         local_vals_.X = h / t;
         local_vals_.Confidence = std::pow(t, 3) / (h * (t - h));
     }
     else // imperfect sensor
     {
-        if (h <= (1.0 - params.AssumedSensorAcc.at("w")) * t)
+        if (h <= (1.0 - sensor_acc_w) * t)
         {
-            double num = std::pow(params.AssumedSensorAcc.at("b") + params.AssumedSensorAcc.at("w") - 1.0, 2) * (t * std::pow(params.AssumedSensorAcc.at("w"), 2) - 2 * (t - h) * params.AssumedSensorAcc.at("w") + (t - h));
-            double denom = std::pow(params.AssumedSensorAcc.at("w"), 2) * std::pow(params.AssumedSensorAcc.at("w") - 1.0, 2);
+            double num = std::pow(sensor_acc_b + sensor_acc_w - 1.0, 2) * (t * std::pow(sensor_acc_w, 2) - 2 * (t - h) * sensor_acc_w + (t - h));
+            double denom = std::pow(sensor_acc_w, 2) * std::pow(sensor_acc_w - 1.0, 2);
 
             local_vals_.X = 0.0;
             local_vals_.Confidence = num / denom;
         }
-        else if (h >= params.AssumedSensorAcc.at("b") * t)
+        else if (h >= sensor_acc_b * t)
         {
-            double num = std::pow(params.AssumedSensorAcc.at("b") + params.AssumedSensorAcc.at("w") - 1.0, 2) * (t * std::pow(params.AssumedSensorAcc.at("b"), 2) - 2 * h * params.AssumedSensorAcc.at("b") + h);
-            double denom = std::pow(params.AssumedSensorAcc.at("b"), 2) * std::pow(params.AssumedSensorAcc.at("b") - 1.0, 2);
+            double num = std::pow(sensor_acc_b + sensor_acc_w - 1.0, 2) * (t * std::pow(sensor_acc_b, 2) - 2 * h * sensor_acc_b + h);
+            double denom = std::pow(sensor_acc_b, 2) * std::pow(sensor_acc_b - 1.0, 2);
 
             local_vals_.X = 1.0;
             local_vals_.Confidence = num / denom;
         }
         else
         {
-            local_vals_.X = (h / t + params.AssumedSensorAcc.at("w") - 1.0) / (params.AssumedSensorAcc.at("b") + params.AssumedSensorAcc.at("w") - 1);
-            local_vals_.Confidence = (std::pow(t, 3) * std::pow(params.AssumedSensorAcc.at("b") + params.AssumedSensorAcc.at("w") - 1.0, 2)) / (h * (t - h));
+            local_vals_.X = (h / t + sensor_acc_w - 1.0) / (sensor_acc_b + sensor_acc_w - 1);
+            local_vals_.Confidence = (std::pow(t, 3) * std::pow(sensor_acc_b + sensor_acc_w - 1.0, 2)) / (h * (t - h));
         }
     }
 }

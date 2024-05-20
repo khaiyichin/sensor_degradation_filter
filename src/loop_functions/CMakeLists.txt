@@ -2,6 +2,7 @@
 # Add loop functions library
 add_library(${PROJECT_NAME}_loop_functions
     SHARED
+    ../Arena.cpp
     StaticDegLoopFunctions.cpp
 )
 

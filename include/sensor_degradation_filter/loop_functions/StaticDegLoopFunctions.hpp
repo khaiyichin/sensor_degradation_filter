@@ -138,6 +138,8 @@ private:
 
     std::vector<std::string> sorted_robot_ids_;
 
+    std::shared_ptr<CSpace::TMapPerType> kheperaiv_entities_map_ptr_;
+
     bool finished_ = false; ///< Flag to indicate whether all simulation parameters have been executed
 };
 

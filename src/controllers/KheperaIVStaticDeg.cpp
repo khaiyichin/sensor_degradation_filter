@@ -59,7 +59,10 @@ KheperaIVStaticDeg::KheperaIVStaticDeg() : ci_wheels_ptr_(NULL),
                                            ci_rab_actuator_ptr_(NULL),
                                            ci_rab_sensor_ptr_(NULL),
                                            ci_ground_ptr_(NULL),
-                                           ci_proximity_ptr_(NULL)
+                                           ci_proximity_ptr_(NULL),
+                                           ci_leds_ptr_(NULL),
+                                           sensor_degradation_filter_ptr_(NULL),
+                                           collective_perception_algo_ptr_(std::make_shared<CollectivePerception>())
 {
 }
 
@@ -104,61 +107,70 @@ void KheperaIVStaticDeg::Init(TConfigurationNode &xml_node)
     GetNodeAttribute(GetNode(xml_node, "ground_sensor"), "sensor_acc_w", ground_sensor_params_.ActualSensorAcc["w"]);
     GetNodeAttribute(GetNode(xml_node, "comms"), "period", comms_params_.CommsPeriodTicks);
 
-    bool is_simulated;
-    GetNodeAttribute(GetNode(xml_node, "static_degradation"), "sim", is_simulated);
-
-    if (is_simulated) // simulated experiments
-    {
-        // Set the assumed accuracies to be the same for now; they will be updated by the loop functions
-        collective_perception_params_ptr_->AssumedSensorAcc["b"] = ground_sensor_params_.ActualSensorAcc["b"];
-        collective_perception_params_ptr_->AssumedSensorAcc["w"] = ground_sensor_params_.ActualSensorAcc["w"];
-        run_degradation_filter_ = false; // will be activated from the loop functions if required
-        SetLEDs(CColor::BLUE);           // set to blue initially
-    }
-    else // physical experiments
-    {
-        GetNodeAttribute(GetNode(xml_node, "static_degradation"), "assumed_sensor_acc_b", collective_perception_params_ptr_->AssumedSensorAcc["b"]);
-        GetNodeAttribute(GetNode(xml_node, "static_degradation"), "assumed_sensor_acc_w", collective_perception_params_ptr_->AssumedSensorAcc["w"]);
-        GetNodeAttribute(GetNode(xml_node, "static_degradation"), "run_filter", run_degradation_filter_);
-        THROW_ARGOSEXCEPTION("Not implemented yet.");
-    }
-
-    /* Create a random number generator. We use the 'argos' category so
-       that creation, reset, seeding and cleanup are managed by ARGoS. */
-    RNG_ptr_ = CRandom::CreateRNG("argos");
-
     // Initialize degradation filter
-    std::string method;
-    GetNodeAttribute(GetNode(xml_node, "static_degradation"), "method", method);
+    TConfigurationNode &static_degradation_filter_node = GetNode(xml_node, "static_degradation_filter");
 
-    std::transform(method.begin(), method.end(), method.begin(), ::toupper);
+    std::string method;
+
+    GetNodeAttribute(static_degradation_filter_node, "method", method);
+
+    std::transform(method.begin(),
+                   method.end(),
+                   method.begin(),
+                   ::toupper);
 
     if (method == "ALPHA")
     {
-        filter_ptr_ =
-            std::make_shared<StaticDegradationFilterAlpha>(collective_perception_params_ptr_,
-                                                           collective_perception_algo_ptr_);
+        sensor_degradation_filter_ptr_ =
+            std::make_shared<StaticDegradationFilterAlpha>(collective_perception_algo_ptr_);
+        sensor_degradation_filter_ptr_->GetParamsPtr()->Method = "ALPHA";
     }
     else if (method == "BRAVO")
     {
-        // filter_ptr_ = std::make_shared<StaticDegradationFilterBravo>();
+        // sensor_degradation_filter_ptr_ = std::make_shared<StaticDegradationFilterBravo>();
     }
     else
     {
         throw std::runtime_error("Unknown static degradation filter method, please double-check the XML file.");
     }
+
+    bool is_simulated;
+    GetNodeAttribute(static_degradation_filter_node, "sim", is_simulated);
+
+    SensorDegradationFilter::Params &sensor_degradation_filter_params = *sensor_degradation_filter_ptr_->GetParamsPtr();
+
+    if (is_simulated) // simulated experiments
+    {
+        // Set the assumed accuracies to be the same for now; they will be updated by the loop functions
+        sensor_degradation_filter_params.AssumedSensorAcc["b"] = ground_sensor_params_.ActualSensorAcc["b"];
+        sensor_degradation_filter_params.AssumedSensorAcc["w"] = ground_sensor_params_.ActualSensorAcc["w"];
+        sensor_degradation_filter_params.RunDegradationFilter = false; // will be activated from the loop functions if required
+        SetLEDs(CColor::BLUE);                                         // set to blue initially
+    }
+    else // physical experiments
+    {
+        GetNodeAttribute(static_degradation_filter_node, "assumed_sensor_acc_b", sensor_degradation_filter_params.AssumedSensorAcc["b"]);
+        GetNodeAttribute(static_degradation_filter_node, "assumed_sensor_acc_w", sensor_degradation_filter_params.AssumedSensorAcc["w"]);
+        GetNodeAttribute(static_degradation_filter_node, "run_filter", sensor_degradation_filter_params.RunDegradationFilter);
+        THROW_ARGOSEXCEPTION("Not implemented yet.");
+    }
+
+    GetNodeAttribute(static_degradation_filter_node, "period", sensor_degradation_filter_params.FilterActivationPeriodTicks);
+
+    /* Create a random number generator. We use the 'argos' category so
+       that creation, reset, seeding and cleanup are managed by ARGoS. */
+    RNG_ptr_ = CRandom::CreateRNG("argos");
 }
 
 void KheperaIVStaticDeg::Reset()
 {
-    collective_perception_params_ptr_->NumBlackTilesSeen = 0;
-    collective_perception_params_ptr_->NumObservations = 0;
     tick_counter_ = 0;
 
-    if (run_degradation_filter_)
+    collective_perception_algo_ptr_->Reset();
+
+    if (sensor_degradation_filter_ptr_->GetParamsPtr()->RunDegradationFilter)
     {
-        // reset to initial assumed accuracy
-        collective_perception_params_ptr_->AssumedSensorAcc = initial_assumed_accuracy_;
+        sensor_degradation_filter_ptr_->Reset();
         SetLEDs(CColor::RED);
     }
     else
@@ -169,15 +181,15 @@ void KheperaIVStaticDeg::Reset()
 
 std::vector<Real> KheperaIVStaticDeg::GetData() const
 {
-    return {static_cast<Real>(collective_perception_params_ptr_->NumBlackTilesSeen),
-            static_cast<Real>(collective_perception_params_ptr_->NumObservations),
+    return {static_cast<Real>(collective_perception_algo_ptr_->GetParamsPtr()->NumBlackTilesSeen),
+            static_cast<Real>(collective_perception_algo_ptr_->GetParamsPtr()->NumObservations),
             collective_perception_algo_ptr_->GetLocalVals().X,
             collective_perception_algo_ptr_->GetLocalVals().Confidence,
             collective_perception_algo_ptr_->GetSocialVals().X,
             collective_perception_algo_ptr_->GetSocialVals().Confidence,
             collective_perception_algo_ptr_->GetInformedVals().X,
-            collective_perception_params_ptr_->AssumedSensorAcc.at("b"),
-            collective_perception_params_ptr_->AssumedSensorAcc.at("w")};
+            sensor_degradation_filter_ptr_->GetParamsPtr()->AssumedSensorAcc.at("b"),
+            sensor_degradation_filter_ptr_->GetParamsPtr()->AssumedSensorAcc.at("w")};
 }
 
 void KheperaIVStaticDeg::SetLEDs(const CColor &color)
@@ -187,15 +199,18 @@ void KheperaIVStaticDeg::SetLEDs(const CColor &color)
 
 void KheperaIVStaticDeg::ControlStep()
 {
+    ++tick_counter_;
+
     // Move robot
     SetWheelSpeedsFromVector(ComputeDiffusionVector());
 
     // Collect ground measurement and compute local estimate
     if (tick_counter_ % ground_sensor_params_.GroundMeasurementPeriodTicks == 0)
     {
-        collective_perception_params_ptr_->NumBlackTilesSeen += 1 - ObserveTileColor(); // the collective perception algorithm flips the black and white tiles
-        ++collective_perception_params_ptr_->NumObservations;
-        collective_perception_algo_ptr_->ComputeLocalEstimate(*collective_perception_params_ptr_);
+        collective_perception_algo_ptr_->GetParamsPtr()->NumBlackTilesSeen += 1 - ObserveTileColor(); // the collective perception algorithm flips the black and white tiles
+        ++collective_perception_algo_ptr_->GetParamsPtr()->NumObservations;
+        collective_perception_algo_ptr_->ComputeLocalEstimate(sensor_degradation_filter_ptr_->GetParamsPtr()->AssumedSensorAcc.at("b"),
+                                                              sensor_degradation_filter_ptr_->GetParamsPtr()->AssumedSensorAcc.at("w"));
     }
 
     // Communicate local estimates and compute social estimate
@@ -245,18 +260,18 @@ void KheperaIVStaticDeg::ControlStep()
 
     // Compute informed estimate only if there are new local or social estimates
     if (tick_counter_ % ground_sensor_params_.GroundMeasurementPeriodTicks == 0 || tick_counter_ % comms_params_.CommsPeriodTicks == 0)
-        collective_perception_algo_ptr_->ComputeInformedEstimate();
-
-    // Run degradation filter
-    if (run_degradation_filter_)
     {
-        filter_ptr_->Estimate();
-
-        // update sensor accuracies
-        UpdateAssumedSensorAcc(filter_ptr_->GetAccuracyEstimates());
+        collective_perception_algo_ptr_->ComputeInformedEstimate();
     }
 
-    ++tick_counter_;
+    // Run degradation filter
+    if (sensor_degradation_filter_ptr_->GetParamsPtr()->RunDegradationFilter && tick_counter_ % sensor_degradation_filter_ptr_->GetParamsPtr()->FilterActivationPeriodTicks == 0)
+    {
+        sensor_degradation_filter_ptr_->Estimate();
+
+        // update sensor accuracies
+        UpdateAssumedSensorAcc(sensor_degradation_filter_ptr_->GetAccuracyEstimates());
+    }
 }
 
 UInt32 KheperaIVStaticDeg::ObserveTileColor()

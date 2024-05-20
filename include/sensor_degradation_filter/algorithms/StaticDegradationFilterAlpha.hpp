@@ -10,15 +10,11 @@
 class StaticDegradationFilterAlpha : public SensorDegradationFilter
 {
 public:
-    StaticDegradationFilterAlpha(const std::shared_ptr<CollectivePerception::Params> &params_ptr,
-                                 const std::shared_ptr<CollectivePerception> &col_per_ptr);
+    StaticDegradationFilterAlpha(const std::shared_ptr<CollectivePerception> &col_per_ptr);
 
     virtual void Estimate();
 
-    std::shared_ptr<CollectivePerception::Params> collective_perception_params_ptr_;
-
     std::shared_ptr<CollectivePerception> collective_perception_algo_ptr_;
-
 };
 
 #endif

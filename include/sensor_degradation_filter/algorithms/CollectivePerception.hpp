@@ -6,6 +6,7 @@
 #include <cmath>
 #include <numeric>
 #include <unordered_map>
+#include <memory>
 
 class CollectivePerception
 {
@@ -53,14 +54,28 @@ public:
 
     struct Params
     {
-        unsigned int NumBlackTilesSeen;
-        unsigned int NumObservations;
-        std::unordered_map<std::string, double> AssumedSensorAcc = {{"b", -1.0}, {"w", -1.0}};
+        void Reset()
+        {
+            NumBlackTilesSeen = 0;
+            NumObservations = 0;
+        }
+
+        unsigned int NumBlackTilesSeen = 0;
+
+        unsigned int NumObservations = 0;
     };
 
-    CollectivePerception() {}
+    CollectivePerception() : params_ptr_(std::make_shared<Params>()) {}
 
-    void ComputeLocalEstimate(const Params &params);
+    void Reset()
+    {
+        local_vals_ = EstConfPair(0.5, 0.0);
+        social_vals_ = EstConfPair();
+        informed_vals_ = EstConfPair();
+        params_ptr_->Reset();
+    }
+
+    void ComputeLocalEstimate(const double &sensor_acc_b, const double &sensor_acc_w);
 
     void ComputeSocialEstimate(const std::vector<EstConfPair> &neighbor_vals);
 
@@ -72,12 +87,16 @@ public:
 
     EstConfPair GetInformedVals() const { return informed_vals_; }
 
+    std::shared_ptr<Params> GetParamsPtr() const { return params_ptr_; }
+
 private:
-    EstConfPair local_vals_; ///< Local values
+    EstConfPair local_vals_ = EstConfPair(0.5, 0.0); ///< Local values
 
-    EstConfPair social_vals_; ///< Social values
+    EstConfPair social_vals_ = EstConfPair(); ///< Social values
 
-    EstConfPair informed_vals_; ///< Informed values
+    EstConfPair informed_vals_ = EstConfPair(); ///< Informed values
+
+    std::shared_ptr<Params> params_ptr_; ///< Pointer to parameters struct
 };
 
 #endif

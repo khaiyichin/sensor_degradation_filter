@@ -160,37 +160,21 @@ void StaticDegLoopFunctions::Init(TConfigurationNode &t_tree)
     }
 
     // Iterate through all the robots and modify the flawed robots assumed accuracies
-    auto &kheperaiv_entities_map = space_ptr_->GetEntitiesByType("kheperaiv");
-    for (auto itr = kheperaiv_entities_map.begin(); itr != kheperaiv_entities_map.end(); ++itr)
+    kheperaiv_entities_map_ptr_ = std::make_shared<CSpace::TMapPerType>(space_ptr_->GetEntitiesByType("kheperaiv"));
+
+    for (auto itr = kheperaiv_entities_map_ptr_->begin(); itr != kheperaiv_entities_map_ptr_->end(); ++itr)
     {
         sorted_robot_ids_.push_back(itr->first);
     }
 
-    std::cout << "debug: IDs before =";
-
-    for (auto itr = sorted_robot_ids_.begin(); itr != sorted_robot_ids_.end(); ++itr)
-    {
-        std::cout << *itr;
-    }
-    std::cout << std::endl;
-
     // Sort the robots based on their IDs so that the last n number of robots are flawed
     std::sort(sorted_robot_ids_.begin(), sorted_robot_ids_.end());
-    std::cout << "debug: IDs after =";
-
-    for (auto itr = sorted_robot_ids_.begin(); itr != sorted_robot_ids_.end(); ++itr)
-    {
-        std::cout << *itr;
-    }
-    std::cout << std::endl;
 
     // Go through the last n number from the back to adjust their assumed sensor accuracies
     for (size_t i = exp_params_.NumRobots - 1; i >= (exp_params_.NumRobots - exp_params_.NumFlawedRobots); --i)
     {
-        CKheperaIVEntity &kheperaiv_entity = *any_cast<CKheperaIVEntity *>(kheperaiv_entities_map[sorted_robot_ids_[i]]);
+        CKheperaIVEntity &kheperaiv_entity = *any_cast<CKheperaIVEntity *>(kheperaiv_entities_map_ptr_->at(sorted_robot_ids_[i]));
         KheperaIVStaticDeg &controller = dynamic_cast<KheperaIVStaticDeg &>(kheperaiv_entity.GetControllableEntity().GetController());
-
-        std::cout << "debug setting flawed sensor i=" << i << std::endl;
 
         controller.UpdateAssumedSensorAcc(exp_params_.AssumedSensorAcc, true);
         controller.ActivateDegradationFilter();
@@ -209,17 +193,26 @@ void StaticDegLoopFunctions::SetupExperiment()
     id_data_str_map_ = RobotIdDataStrMap();
 
     InitializeJSON();
+
+    // Collect data at the zero-th time step
+    for (size_t i = 0; i < exp_params_.NumRobots; ++i)
+    {
+        // Get reference to the robot's controller
+        CKheperaIVEntity &kheperaiv_entity = *any_cast<CKheperaIVEntity *>(kheperaiv_entities_map_ptr_->at(sorted_robot_ids_[i]));
+        KheperaIVStaticDeg &controller = dynamic_cast<KheperaIVStaticDeg &>(kheperaiv_entity.GetControllableEntity().GetController());
+
+        // Convert and store data string
+        id_data_str_map_[kheperaiv_entity.GetId()].push_back(ConvertDataToString(controller.GetData()));
+    }
 }
 
 void StaticDegLoopFunctions::PostStep()
 {
     // Grab data from each robot
-    CSpace::TMapPerType &kheperaiv_entities_map = GetSpace().GetEntitiesByType("kheperaiv");
-
-    for (CSpace::TMapPerType::iterator itr = kheperaiv_entities_map.begin(); itr != kheperaiv_entities_map.end(); ++itr)
+    for (size_t i = 0; i < exp_params_.NumRobots; ++i)
     {
         // Get reference to the robot's controller
-        CKheperaIVEntity &kheperaiv_entity = *any_cast<CKheperaIVEntity *>(itr->second);
+        CKheperaIVEntity &kheperaiv_entity = *any_cast<CKheperaIVEntity *>(kheperaiv_entities_map_ptr_->at(sorted_robot_ids_[i]));
         KheperaIVStaticDeg &controller = dynamic_cast<KheperaIVStaticDeg &>(kheperaiv_entity.GetControllableEntity().GetController());
 
         // Convert and store data string
@@ -285,14 +278,12 @@ void StaticDegLoopFunctions::SaveData()
 
         outfile.close();
     }
-
-    // benchmark_algo_ptr_->SaveData(foldername_prefix);
 }
 
 void StaticDegLoopFunctions::InitializeJSON()
 {
     curr_json_ = ordered_json{};
-    curr_json_["sim_type"] = "dynamic_topo_static_deg";
+    curr_json_["sim_type"] = "dynamic_topo_static_deg_1d";
     curr_json_["num_robots"] = exp_params_.NumRobots;
     curr_json_["num_flawed_robots_"] = exp_params_.NumFlawedRobots;
     curr_json_["num_trials"] = exp_params_.NumTrials;

@@ -97,24 +97,27 @@ public:
 
     CommsParams GetCommsParams() const { return comms_params_; }
 
-    CollectivePerception::Params GetCollectivePerceptionParams() const { return *collective_perception_params_ptr_; }
+    CollectivePerception::Params GetCollectivePerceptionParams() const { return *(collective_perception_algo_ptr_->GetParamsPtr()); }
+
+    SensorDegradationFilter::Params GetSensorDegradationFilterParams() const { return *(sensor_degradation_filter_ptr_->GetParamsPtr()); }
 
     std::vector<Real> GetData() const;
 
     void UpdateAssumedSensorAcc(const std::unordered_map<std::string, Real> &updated_accuracies_map, const bool &initial = false)
     {
-        collective_perception_params_ptr_->AssumedSensorAcc = updated_accuracies_map;
+        sensor_degradation_filter_ptr_->GetParamsPtr()->AssumedSensorAcc = updated_accuracies_map;
 
         if (initial)
         {
-            initial_assumed_accuracy_ = updated_accuracies_map;
+            sensor_degradation_filter_ptr_->GetParamsPtr()->InitialAssumedAcc = updated_accuracies_map;
         }
     }
 
     void SetLEDs(const CColor &color);
 
-    void ActivateDegradationFilter() { run_degradation_filter_ = true; }
-    void DeactivateDegradationFilter() { run_degradation_filter_ = false; }
+    void ActivateDegradationFilter() { sensor_degradation_filter_ptr_->GetParamsPtr()->RunDegradationFilter = true; }
+
+    void DeactivateDegradationFilter() { sensor_degradation_filter_ptr_->GetParamsPtr()->RunDegradationFilter = false; }
 
 private:
     UInt32 ObserveTileColor();
@@ -160,15 +163,10 @@ protected:
     /* Collective perception algorithm */
     std::shared_ptr<CollectivePerception> collective_perception_algo_ptr_;
 
-    std::shared_ptr<CollectivePerception::Params> collective_perception_params_ptr_;
-
-    std::shared_ptr<SensorDegradationFilter> filter_ptr_;
+    /* Sensor degradation filter */
+    std::shared_ptr<SensorDegradationFilter> sensor_degradation_filter_ptr_;
 
     UInt64 tick_counter_ = 0;
-
-    bool run_degradation_filter_ = false;
-
-    std::unordered_map<std::string, Real> initial_assumed_accuracy_;
 
     CRange<Real> standard_uniform_support_ = CRange<Real>(0.0, 1.0);
 };
