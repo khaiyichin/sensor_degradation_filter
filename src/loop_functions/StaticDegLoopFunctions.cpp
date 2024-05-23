@@ -124,6 +124,32 @@ void StaticDegLoopFunctions::Init(TConfigurationNode &t_tree)
         TConfigurationNode &framework_experiment_node = GetNode(GetNode(GetSimulator().GetConfigurationRoot(), "framework"), "experiment");
         GetNodeAttribute(framework_experiment_node, "ticks_per_second", ticks_per_sec_);
 
+        // Grab position and orientation distribution if applicable
+        TConfigurationNode &arena_node = GetNode(GetSimulator().GetConfigurationRoot(), "arena");
+
+        try
+        {
+            // Check whether there are kheperaiv entities to distribute
+            auto &distribute_node = GetNode(arena_node, "distribute");
+            auto &entity_node = GetNode(distribute_node, "entity");
+
+            // Set flag to re-distribute robot placement during reset
+            exp_params_.DistributeRobotPlacement = true;
+
+            // Get position
+            exp_params_.PositionPlacementGeneratorPtr = std::shared_ptr<RealNumberGenerator>(CreateGenerator(GetNode(distribute_node, "position")));
+
+            // Get orientation
+            exp_params_.OrientationPlacementGeneratorPtr = std::shared_ptr<RealNumberGenerator>(CreateGenerator(GetNode(distribute_node, "orientation")));
+
+            // Get number of placement trials
+            GetNodeAttribute(GetNode(distribute_node, "entity"), "max_trials", exp_params_.MaxPlacementTrials);
+        }
+        catch (const std::exception &e)
+        {
+            // Do nothing, there's no robot pose to re-distribute when resetting later
+        }
+
         // Grab save path
         GetNodeAttribute(GetNode(static_deg_node, "path"), "folder", exp_params_.SaveFolder);
 
@@ -182,6 +208,16 @@ void StaticDegLoopFunctions::Init(TConfigurationNode &t_tree)
     }
 
     // Setup experiment
+    SetupExperiment();
+}
+
+void StaticDegLoopFunctions::Reset()
+{
+    if (exp_params_.DistributeRobotPlacement)
+    {
+        ResetRobotPositions();
+    }
+
     SetupExperiment();
 }
 
@@ -264,7 +300,6 @@ void StaticDegLoopFunctions::SaveData()
 
     // Create individual JSON files
     for (size_t i = 0; i < json_data_vec_.size(); ++i)
-    // for (auto itr = json_data_vec_.begin(); itr != json_data_vec_.end(); ++itr)
     {
         std::string filename = "flw" + std::to_string(exp_params_.NumFlawedRobots) + "_" +
                                "t" + std::to_string(i);
@@ -322,6 +357,50 @@ std::string StaticDegLoopFunctions::ConvertDataToString(const std::vector<Real> 
     ss.str().pop_back(); // remove the last comma
 
     return ss.str();
+}
+
+void StaticDegLoopFunctions::ResetRobotPositions()
+{
+    bool done_placing, retry_placing;
+    UInt64 placement_trials;
+    CVector3 position;
+    CQuaternion orientation;
+    CVector3 euler_angles;
+
+    // Iterate through each robot
+    for (size_t i = 0; i < exp_params_.NumRobots; ++i)
+    {
+        // Get reference to the robot's entity
+        CKheperaIVEntity &kheperaiv_entity = *any_cast<CKheperaIVEntity *>(kheperaiv_entities_map_ptr_->at(sorted_robot_ids_[i]));
+
+        done_placing = false;
+        retry_placing = false;
+        placement_trials = 0;
+
+        do
+        {
+            ++placement_trials;
+
+            // Set the positions and orientation
+            position = (*exp_params_.PositionPlacementGeneratorPtr)(retry_placing);
+            euler_angles = (*exp_params_.OrientationPlacementGeneratorPtr)(retry_placing);
+            orientation.FromEulerAngles(
+                ToRadians(CDegrees(euler_angles[0])),  // Z
+                ToRadians(CDegrees(euler_angles[1])),  // Y
+                ToRadians(CDegrees(euler_angles[2]))); // X
+
+            // Move the robot
+            done_placing = MoveEntity(kheperaiv_entity.GetEmbodiedEntity(), position, orientation);
+
+            retry_placing = true; // if we get to this point after the first run without done_placing being true, then we're retrying
+        } while (!done_placing && placement_trials <= exp_params_.MaxPlacementTrials);
+
+        // Check if placing is done for this particular robot
+        if (!done_placing)
+        {
+            THROW_ARGOSEXCEPTION("Can't place " << kheperaiv_entity.GetId());
+        }
+    }
 }
 
 REGISTER_LOOP_FUNCTIONS(StaticDegLoopFunctions, "static_deg_loop_functions")
