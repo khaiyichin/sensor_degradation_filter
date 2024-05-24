@@ -21,6 +21,8 @@ public:
 
         unsigned int FilterActivationPeriodTicks;
 
+        std::unordered_map<std::string, std::string> FilterSpecificParams;
+
         std::unordered_map<std::string, double> AssumedSensorAcc = {{"b", -1.0}, {"w", -1.0}};
 
         std::unordered_map<std::string, double> InitialAssumedAcc = {{"b", -1.0}, {"w", -1.0}};

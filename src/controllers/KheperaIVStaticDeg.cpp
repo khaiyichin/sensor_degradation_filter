@@ -102,10 +102,10 @@ void KheperaIVStaticDeg::Init(TConfigurationNode &xml_node)
     wheel_turning_params_.Init(GetNode(xml_node, "wheel_turning"));
 
     // Populate robot parameters
-    GetNodeAttribute(GetNode(xml_node, "ground_sensor"), "period", ground_sensor_params_.GroundMeasurementPeriodTicks);
+    GetNodeAttribute(GetNode(xml_node, "ground_sensor"), "period_ticks", ground_sensor_params_.GroundMeasurementPeriodTicks);
     GetNodeAttribute(GetNode(xml_node, "ground_sensor"), "sensor_acc_b", ground_sensor_params_.ActualSensorAcc["b"]);
     GetNodeAttribute(GetNode(xml_node, "ground_sensor"), "sensor_acc_w", ground_sensor_params_.ActualSensorAcc["w"]);
-    GetNodeAttribute(GetNode(xml_node, "comms"), "period", comms_params_.CommsPeriodTicks);
+    GetNodeAttribute(GetNode(xml_node, "comms"), "period_ticks", comms_params_.CommsPeriodTicks);
 
     // Initialize degradation filter
     TConfigurationNode &static_degradation_filter_node = GetNode(xml_node, "static_degradation_filter");
@@ -124,10 +124,17 @@ void KheperaIVStaticDeg::Init(TConfigurationNode &xml_node)
         sensor_degradation_filter_ptr_ =
             std::make_shared<StaticDegradationFilterAlpha>(collective_perception_algo_ptr_);
         sensor_degradation_filter_ptr_->GetParamsPtr()->Method = "ALPHA";
+        sensor_degradation_filter_ptr_->GetParamsPtr()->FilterSpecificParams = {{"None", "None"}}; // no filter specific parameters for ALPHA
     }
     else if (method == "BRAVO")
     {
-        // sensor_degradation_filter_ptr_ = std::make_shared<StaticDegradationFilterBravo>();
+        // sensor_degradation_filter_ptr_ =
+        //     std::make_shared<StaticDegradationFilterBravo>(collective_perception_algo_ptr_);
+        // sensor_degradation_filter_ptr_->GetParamsPtr()->Method = "BRAVO";
+        // std::string type_2_err_prob_str;
+        // GetNodeAttribute(GetNode(static_degradation_filter_node, "params"), "type_2_err_prob", type_2_err_prob_str);
+        // sensor_degradation_filter_ptr_->GetParamsPtr()->FilterSpecificParams = {{"type2ErrProb", type_2_err_prob_str}}; // no filter specific parameters for ALPHA
+        // sensor_degradation_filter_ptr_->GetParamsPtr()->Type2ErrProb = std::stod(type_2_err_prob);
     }
     else
     {
@@ -155,7 +162,7 @@ void KheperaIVStaticDeg::Init(TConfigurationNode &xml_node)
         THROW_ARGOSEXCEPTION("Not implemented yet.");
     }
 
-    GetNodeAttribute(static_degradation_filter_node, "period", sensor_degradation_filter_params.FilterActivationPeriodTicks);
+    GetNodeAttribute(static_degradation_filter_node, "period_ticks", sensor_degradation_filter_params.FilterActivationPeriodTicks);
 
     /* Create a random number generator. We use the 'argos' category so
        that creation, reset, seeding and cleanup are managed by ARGoS. */
@@ -171,7 +178,15 @@ void KheperaIVStaticDeg::Reset()
     if (sensor_degradation_filter_ptr_->GetParamsPtr()->RunDegradationFilter)
     {
         sensor_degradation_filter_ptr_->Reset();
-        SetLEDs(CColor::RED);
+
+        if (sensor_degradation_filter_ptr_->GetParamsPtr()->AssumedSensorAcc == ground_sensor_params_.ActualSensorAcc)
+        {
+            SetLEDs(CColor::GREEN); // has the correct assumed accuracy to start
+        }
+        else
+        {
+            SetLEDs(CColor::RED);
+        }
     }
     else
     {

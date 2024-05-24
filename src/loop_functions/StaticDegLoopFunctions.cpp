@@ -96,6 +96,7 @@ void StaticDegLoopFunctions::Init(TConfigurationNode &t_tree)
         GetNodeAttribute(flawed_robots_node, "num", exp_params_.NumFlawedRobots);
         GetNodeAttribute(flawed_robots_node, "acc_b", exp_params_.AssumedSensorAcc.at("b"));
         GetNodeAttribute(flawed_robots_node, "acc_w", exp_params_.AssumedSensorAcc.at("w"));
+        GetNodeAttribute(flawed_robots_node, "activate_filter_for_all", exp_params_.FilterActiveForAll);
 
         // Grab robot speeds
         exp_params_.RobotSpeed = static_deg_controller.GetWheelTurningParams().MaxSpeed;
@@ -104,7 +105,12 @@ void StaticDegLoopFunctions::Init(TConfigurationNode &t_tree)
         exp_params_.MeasurementPeriod = static_deg_controller.GetGroundSensorParams().GroundMeasurementPeriodTicks;
         exp_params_.CommsPeriod = static_deg_controller.GetCommsParams().CommsPeriodTicks;
 
-        // Grab number of agents and communications range
+        // Grab filter parameters
+        exp_params_.FilterMethod = static_deg_controller.GetSensorDegradationFilterParams().Method;
+        exp_params_.FilterPeriod = static_deg_controller.GetSensorDegradationFilterParams().FilterActivationPeriodTicks;
+        exp_params_.FilterSpecificParams = static_deg_controller.GetSensorDegradationFilterParams().FilterSpecificParams;
+
+        // Grab number of robots and communications range
         UInt64 size;
         Real range;
 
@@ -159,7 +165,7 @@ void StaticDegLoopFunctions::Init(TConfigurationNode &t_tree)
             THROW_ARGOSEXCEPTION("Save folder doesn't exist.");
         }
 
-        if (verbose_level_ == "full" || verbose_level_ == "reduced")
+        if (verbose_level_ == "full")
         {
             LOG << "[INFO] Verbose level = \"" << verbose_level_ << "\"" << std::endl;
             LOG << "[INFO] Specifying number of arena tiles = " << arena_x << "*" << arena_y << std::endl;
@@ -196,8 +202,24 @@ void StaticDegLoopFunctions::Init(TConfigurationNode &t_tree)
     // Sort the robots based on their IDs so that the last n number of robots are flawed
     std::sort(sorted_robot_ids_.begin(), sorted_robot_ids_.end());
 
-    // Go through the last n number from the back to adjust their assumed sensor accuracies
-    for (size_t i = exp_params_.NumRobots - 1; i >= (exp_params_.NumRobots - exp_params_.NumFlawedRobots); --i)
+    // Go through the first n number of robots to activate degradation filter, if applicable (i.e., only for initially correct robots)
+    UInt32 num_correct_robots = exp_params_.NumRobots - exp_params_.NumFlawedRobots;
+
+    if (exp_params_.FilterActiveForAll)
+    {
+        for (size_t i = 0; i < num_correct_robots; ++i)
+        {
+            CKheperaIVEntity &kheperaiv_entity = *any_cast<CKheperaIVEntity *>(kheperaiv_entities_map_ptr_->at(sorted_robot_ids_[i]));
+            KheperaIVStaticDeg &controller = dynamic_cast<KheperaIVStaticDeg &>(kheperaiv_entity.GetControllableEntity().GetController());
+
+            controller.UpdateAssumedSensorAcc(exp_params_.ActualSensorAcc, true);
+            controller.ActivateDegradationFilter();
+            controller.SetLEDs(CColor::GREEN);
+        }
+    }
+
+    // Go through the last n number of robots from the back to adjust their assumed sensor accuracies (i.e., only for initially flawed robots)
+    for (size_t i = exp_params_.NumRobots - 1; i >= num_correct_robots; --i)
     {
         CKheperaIVEntity &kheperaiv_entity = *any_cast<CKheperaIVEntity *>(kheperaiv_entities_map_ptr_->at(sorted_robot_ids_[i]));
         KheperaIVStaticDeg &controller = dynamic_cast<KheperaIVStaticDeg &>(kheperaiv_entity.GetControllableEntity().GetController());
@@ -274,7 +296,7 @@ void StaticDegLoopFunctions::PostExperiment()
     // Determine whether to terminate simulation
     if (++curr_trial_ind_ % exp_params_.NumTrials == 0) // all trials have completed
     {
-        if (verbose_level_ == "full" || verbose_level_ == "reduced")
+        if (verbose_level_ == "full")
         {
             LOG << "[INFO] All trials completed." << std::endl;
         }
@@ -320,9 +342,22 @@ void StaticDegLoopFunctions::InitializeJSON()
     curr_json_ = ordered_json{};
     curr_json_["sim_type"] = "dynamic_topo_static_deg_1d";
     curr_json_["num_robots"] = exp_params_.NumRobots;
-    curr_json_["num_flawed_robots_"] = exp_params_.NumFlawedRobots;
+    curr_json_["num_flawed_robots"] = exp_params_.NumFlawedRobots;
     curr_json_["num_trials"] = exp_params_.NumTrials;
     curr_json_["num_steps"] = exp_params_.NumSteps;
+    curr_json_["method"] = exp_params_.FilterMethod;
+    curr_json_["correct_robot_filter"] = exp_params_.FilterActiveForAll;
+    curr_json_["sensor_filter_period"] = exp_params_.FilterPeriod;
+
+    if (exp_params_.FilterSpecificParams.find("None") != exp_params_.FilterSpecificParams.end())
+    {
+        curr_json_["filter_specific_params"] = "None";
+    }
+    else
+    {
+        curr_json_["filter_specific_params"] = exp_params_.FilterSpecificParams;
+    }
+
     curr_json_["tfr"] = exp_params_.TargetFillRatio;
     curr_json_["flawed_sensor_acc_b"] = exp_params_.AssumedSensorAcc["b"];
     curr_json_["flawed_sensor_acc_w"] = exp_params_.AssumedSensorAcc["w"];

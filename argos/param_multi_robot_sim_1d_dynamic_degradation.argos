@@ -48,7 +48,7 @@
           controller.
     -->
         <kheperaiv_static_deg_controller id="ksdc"
-            library="build_argos/src/controllers/libsensor_degradation_filter_controllers">
+            library="controllers/libsensor_degradation_filter_controllers">
             <actuators>
                 <differential_steering implementation="default" />
                 <range_and_bearing implementation="default" />
@@ -60,20 +60,17 @@
                     noise_std_dev="0" />
                 <kheperaiv_proximity implementation="default" show_rays="false" />
             </sensors>
-
             <params>
                 <diffusion go_straight_angle_range="-5:5" delta="0.1" />
-                <ground_sensor period="1" sensor_acc_b="0.95" sensor_acc_w="0.95" />
-                <comms period="10" />
+                <ground_sensor period_ticks="1" sensor_acc_b="0.95" sensor_acc_w="0.95" />
+                <comms period_ticks="10" />
                 <wheel_turning hard_turn_angle_threshold="90"
                     soft_turn_angle_threshold="70"
                     no_turn_angle_threshold="10"
                     max_speed="10" /> <!-- speed in cm/s -->
-                <static_degradation_filter
-                    sim="true"
-                    method="ALPHA"
-                    period="1000"
-                />
+                <static_degradation_filter sim="true" method="ALPHA" period_ticks="1000">
+                    <!-- <params type_2_err_prob="" /> --> <!-- BRAVO filter specific parameters -->
+                </static_degradation_filter>
                 <!-- <static_degradation sim="false" assumed_sensor_acc_b="0.75"
                 assumed_sensor_acc_w="0.75" /> -->
             </params>
@@ -85,18 +82,15 @@
     <!-- ****************** -->
 
     <loop_functions
-        library="build_argos/src/loop_functions/libsensor_degradation_filter_loop_functions"
+        library="loop_functions/libsensor_degradation_filter_loop_functions"
         label="static_deg_loop_functions">
         <static_degradation>
             <num_trials value="3" />
             <arena_tiles tile_count_x="500" tile_count_y="500" /> <!-- number of tiles for the arena -->
             <target_fill_ratio value="0.75" /> <!-- range of target fill ratios -->
-            <flawed_robots num="1" acc_b="0.75" acc_w="0.75" />
-            <speed value="14.14" /> <!-- in units of cm/s -->
-            <path
-                folder="data/temp" /> <!--
-            path to the output data and datetime in filename -->
-            <verbosity level="full" /> <!-- "full", "reduced", "none" -->
+            <flawed_robots num="1" acc_b="0.75" acc_w="0.75" activate_filter_for_all="true" />
+            <path folder="data/temp" /> <!-- path to the output data and datetime in filename -->
+            <verbosity level="full" /> <!-- "full", "none" -->
         </static_degradation>
     </loop_functions>
 
@@ -141,7 +135,7 @@
             <position method="uniform" min="-0.9273198961208501,-0.9273198961208501,0"
                 max="0.9273198961208501,0.9273198961208501,0" />
             <orientation method="uniform" min="0,0,0" max="360,0,0" />
-            <entity quantity="3" max_trials="100" base_num="0">
+            <entity quantity="20" max_trials="100" base_num="0">
                 <kheperaiv id="kiv" rab_data_size="50" rab_range="0.7">
                     <controller config="ksdc" />
                 </kheperaiv>

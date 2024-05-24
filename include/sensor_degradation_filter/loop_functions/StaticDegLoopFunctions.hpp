@@ -31,7 +31,11 @@ struct ExperimentParams
 
     UInt32 MeasurementPeriod;
 
+    UInt32 FilterPeriod;
+
     UInt64 NumSteps;
+
+    std::unordered_map<std::string, std::string> FilterSpecificParams;
 
     std::unordered_map<std::string, Real> ActualSensorAcc = {{"b", -1.0}, {"w", -1.0}};
 
@@ -48,6 +52,10 @@ struct ExperimentParams
     UInt32 MaxPlacementTrials;
 
     bool DistributeRobotPlacement = false;
+
+    bool FilterActiveForAll;
+
+    std::string FilterMethod;
 
     std::string SaveFolder;
 
