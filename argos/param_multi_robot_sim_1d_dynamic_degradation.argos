@@ -132,8 +132,7 @@
 
         <!-- Place a foot-bot in the origin and bind it to the controller -->
         <distribute>
-            <position method="uniform" min="-0.9273198961208501,-0.9273198961208501,0"
-                max="0.9273198961208501,0.9273198961208501,0" />
+            <position method="uniform" min="-0.9273198961208501,-0.9273198961208501,0" max="0.9273198961208501,0.9273198961208501,0" />
             <orientation method="uniform" min="0,0,0" max="360,0,0" />
             <entity quantity="20" max_trials="100" base_num="0">
                 <kheperaiv id="kiv" rab_data_size="50" rab_range="0.7">
