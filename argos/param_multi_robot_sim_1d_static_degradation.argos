@@ -69,7 +69,7 @@
                     no_turn_angle_threshold="10"
                     max_speed="10" /> <!-- speed in cm/s -->
                 <static_degradation_filter sim="true" method="ALPHA" period_ticks="1000">
-                    <!-- <params type_2_err_prob="" /> --> <!-- BRAVO filter specific parameters -->
+                    <params type_2_err_prob="0.05" /> <!-- BRAVO filter specific parameters -->
                 </static_degradation_filter>
                 <!-- <static_degradation sim="false" assumed_sensor_acc_b="0.75"
                 assumed_sensor_acc_w="0.75" /> -->

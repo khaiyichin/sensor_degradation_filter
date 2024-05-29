@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # This script is meant to be executed by a high-level script as an `sbatch` command, and should be copied by said script
-# to the intended working directory before execution. The high-level script will modify the variabls for density, whether
+# to the intended working directory before execution. The high-level script will modify the variables for density, whether
 # to activate the filter for all robots, and the filter period in this script, thus keeping them constant within a single
 # job. Meanwhile, this script iterates different flawed_acc-correct_acc-TFR-flawed_robot combinations within a single job
 # run.
@@ -47,9 +47,9 @@ export PATH=$PATH:$HOME/sensor-degradation-filter/build_argos/src
 # (Adapt this to your needs)
 DATADIR=$(pwd)
 
-# Path to the LOCAL param_multi_robot_sim_1d_dynamic_degradation.argos (copied by the high-level script)
+# Path to the LOCAL param_multi_robot_sim_1d_static_degradation.argos (copied by the high-level script)
 # (Adapt this to your needs)
-ARGOSFILE=${DATADIR}/param_multi_robot_sim_1d_dynamic_degradation.argos
+ARGOSFILE=${DATADIR}/param_multi_robot_sim_1d_static_degradation.argos
 
 
 
@@ -64,8 +64,11 @@ ARGOSFILE=${DATADIR}/param_multi_robot_sim_1d_dynamic_degradation.argos
 CORRECT_FILTER=true
 FLAWED_ROBOT_RANGE=(2 2 10) # array of 3 elements: (min increment max)
 NUM_ROBOTS=20
+DENSITY=10
 WALL_POSITION=2.824329 # related to density
 FILTER_PERIOD=1000
+METHOD=ALPHA
+TYPE_2_ERR_PROB=0.05 # only applicable for BRAVO filter
 
 # Parameters related to this job
 # (Fixed)
@@ -80,7 +83,7 @@ SPEED=14.14
 NUM_TRIALS=30
 MEAS_PERIOD=1
 COMMS_PERIOD=1
-VERBOSITY=reduced
+VERBOSITY=none
 TICKS_PER_SECOND=10
 NUM_TILES=1000
 WALL_THICKNESS=0.1
@@ -90,7 +93,7 @@ ARENA_LEN=10
 # (Change this to reflect the above parameters)
 if [[ "${CORRECT_FILTER}" == "true" ]]; then CORFILT=1; else CORFILT=0; fi
 FLW_RANGE=${FLAWED_ROBOT_RANGE[0]}-${FLAWED_ROBOT_RANGE[1]}-${FLAWED_ROBOT_RANGE[2]}
-THISJOB=dynamic_topo_static_deg_alpha_corfilt${CORFILT}_filtp${FILTER_PERIOD}
+THISJOB=dynamic_topo_static_deg_alpha_corfilt${CORFILT}_filtp${FILTER_PERIOD}_den${DENSITY}
 
 # Job working directory
 # (Don't change this)
@@ -130,7 +133,11 @@ sed -i "s/<comms period_ticks=.*/<comms period_ticks=\"${COMMS_PERIOD}\" \/>/" $
 sed -i "s/max_speed=.*/max_speed=\"${SPEED}\" \/>/" ${ARGOSFILE}
 
 # Configure filter
-sed -i "s/<static_degradation_filter.*/<static_degradation_filter sim=\"true\" method=\"ALPHA\" period_ticks=\"${FILTER_PERIOD}\" >/" ${ARGOSFILE}
+sed -i "s/<static_degradation_filter.*/<static_degradation_filter sim=\"true\" method=\"${METHOD}\" period_ticks=\"${FILTER_PERIOD}\" >/" ${ARGOSFILE}
+if [[ ${METHOD} == "BRAVO" ]]
+then
+    sed -i "s/<params type_2_err_prob=.*/<params type_2_err_prob=\"${TYPE_2_ERR_PROB}\" \/>/" ${ARGOSFILE}
+fi
 
 # Configure number of trials
 sed -i "s/<num_trials.*/<num_trials value=\"${NUM_TRIALS}\" \/>/" ${ARGOSFILE}
@@ -141,7 +148,7 @@ sed -i "s/<arena_tiles.*/<arena_tiles tile_count_x=\"${NUM_TILES}\" tile_count_y
 # Configure verbosity level
 sed -i "s/<verbosity.*/<verbosity level=\"${VERBOSITY}\" \/>/" ${ARGOSFILE}
 
-# Configure density
+# Configure density (wall positions and robot starting locations)
 sed -i "s/<arena size.*/<arena size=\"${ARENA_LEN}, ${ARENA_LEN}, 1\" center=\"0,0,0.5\">/" ${ARGOSFILE} # arena size
 sed -i "/<box id=\"wall_north\".*/{n;d}" ${ARGOSFILE} # remove the line after "wall_north"
 sed -i "/<box id=\"wall_south\".*/{n;d}" ${ARGOSFILE} # remove the line after "wall_south"
@@ -183,7 +190,7 @@ sed -i "s/<entity.*/<entity quantity=\"${NUM_ROBOTS}\" max_trials=\"100\" base_n
                 if (( ${FLAWED[i]} != ${CORRECT[j]} ))
                 then
                     # Current date and time
-                    CURR_DATETIME=$(date "+%m%d%Y_%H%M%S")
+                    CURR_DATETIME=$(date "+%m%d%y_%H%M%S")
 
                     # Define JSON folder name for current iteration
                     FLWB=${FLAWED[i]}
@@ -191,7 +198,7 @@ sed -i "s/<entity.*/<entity quantity=\"${NUM_ROBOTS}\" max_trials=\"100\" base_n
                     CORB=${CORRECT[j]}
                     CORW=${CORRECT[j]}
 
-                    JSON_FOLDER=${CURR_DATETIME}_t${NUM_TRIALS}_s${NUM_TICKS}_tfr${TFR[k]}_flw${FLW_RANGE}_flwb${FLWB}_flwc${FLWW}_corb${CORB}_corw${CORW}_commsp${COMMSP}_filtp${FILTP}_corfilt${CORFILT}
+                    JSON_FOLDER=${CURR_DATETIME}_t${NUM_TRIALS}_s${NUM_TICKS}_tfr${TFR[k]}_flw${FLW_RANGE}_flwb${FLWB}_flwc${FLWW}_corb${CORB}_corw${CORW}_commsp${COMMSP}_filtp${FILTER_PERIOD}_corfilt${CORFILT}
                     mkdir -p data/${JSON_FOLDER}
 
                     # Configure actual sensor accuracy
@@ -213,7 +220,7 @@ sed -i "s/<entity.*/<entity quantity=\"${NUM_ROBOTS}\" max_trials=\"100\" base_n
                         cp ${ARGOSFILE} ${PARAM_FILE}
 
                         # Run the experiment
-                        run_dynamic_topo_simulations -c ${PARAM_FILE}
+                        run_dynamic_topo_simulations -l /dev/null -c ${PARAM_FILE}
                     done
                 fi
             done
