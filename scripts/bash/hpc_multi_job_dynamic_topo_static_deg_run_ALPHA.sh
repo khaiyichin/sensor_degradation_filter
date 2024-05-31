@@ -53,10 +53,11 @@ do
         pushd ${TARGET_DIR}
         mkdir -p data
 
-        JOB_NAME=${METHOD}_corfilt${CORRECT_FILTER}_filtp${FILTER_PERIOD[j]}_den${DENSITY[i]}
+        JOB_NAME=${METHOD}${CORRECT_FILTER}_filtp${FILTER_PERIOD[j]}_den${DENSITY[i]}
 
         # Run the job
-        sbatch -N 1 -n 2 --mem=8G -p short -o "log_%x_%j.out" -e "log_%x_%j.err" -J ${JOB_NAME} -t 16:00:00 --mail-user=kchin@wpi.edu --mail-type=fail,end ${SBATCH_SCRIPT_TEMPLATE}
+        # With 5 cases of flawed robots to run in parallel, each using a single core, only about 4G is needed per case, leaving about 1G left for the waiting core
+        sbatch -N 1 -n 6 --mem=22G -p short -o "log_%x_%j.out" -e "log_%x_%j.err" -J ${JOB_NAME} -t 04:00:00 --mail-user=kchin@wpi.edu --mail-type=fail,end ${SBATCH_SCRIPT_TEMPLATE}
         popd
     done
 done

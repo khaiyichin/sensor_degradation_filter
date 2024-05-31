@@ -7,10 +7,10 @@
 # run.
 
 # The script works by first modifying a template parameter file ${ARGOSFILE}, then making a copy of it with a specific
-# name ${PARAM_FILE} in the new working directory WORKDIR=${LOCALDIR}/${MYUSER}/${THISJOB}. The actual working directory
-# starts in the folder the high-level script starts this job in, then it moves to ${WORKDIR} to run the experiments. Once
-# complete, all the created files in ${WORKDIR} will be copied over back to the original directory where this job script
-# was started in.
+# name ${PARAM_FILE} in the new working directory WORKDIR=${LOCALDIR}/${MYUSER}/${THISJOB}/${SLURM_JOB_ID}. The actual
+# working directory starts in the folder the high-level script starts this job in, then it moves to ${WORKDIR} to run the
+# experiments. Once complete, all the created files in ${WORKDIR} will be copied over back to the original directory
+# where this job script was started in.
 
 # Stop execution after any error
 set -e
@@ -97,7 +97,7 @@ THISJOB=dynamic_topo_static_deg_alpha_corfilt${CORFILT}_filtp${FILTER_PERIOD}_de
 
 # Job working directory
 # (Don't change this)
-WORKDIR=${LOCALDIR}/${MYUSER}/${THISJOB}
+WORKDIR=${LOCALDIR}/${MYUSER}/${THISJOB}/${SLURM_JOB_ID}
 
 
 
@@ -219,9 +219,17 @@ sed -i "s/<entity.*/<entity quantity=\"${NUM_ROBOTS}\" max_trials=\"100\" base_n
                         # Create the modifed configuration file in the current folder
                         cp ${ARGOSFILE} ${PARAM_FILE}
 
-                        # Run the experiment
-                        run_dynamic_topo_simulations -l /dev/null -c ${PARAM_FILE}
+                        # Run the experiment in parallel (each core runs a single experiment for a specific number of flawed robots)
+                        # With 40,000 steps, maxRSS is lower than 4G, but we use 4.2G just to be safe
+                        srun --exclusive --ntasks=1 --mem-per-cpu=4200M run_dynamic_topo_simulations -l /dev/null -c ${PARAM_FILE} &
                     done
+
+                    # Let all the background processes complete
+                    wait
+
+                    # Transfer data into target data directory (including parameter files)
+                    # (this is to prevent overflowing the /local disk space)
+                    mv data/${JSON_FOLDER} ${PARAM_FILE} $DATADIR/data
                 fi
             done
         done
@@ -231,7 +239,3 @@ sed -i "s/<entity.*/<entity quantity=\"${NUM_ROBOTS}\" max_trials=\"100\" base_n
     echo -e "\n################################### EXECUTION END ###################################"
     echo -e "################################# ${END_TIME} #################################\n"
 }
-
-# Transfer everything into target data directory (including parameter files)
-# (Adapt this to your data files)
-cp -ar ./* $DATADIR
