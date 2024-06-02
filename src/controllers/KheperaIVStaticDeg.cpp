@@ -2,6 +2,7 @@
 
 #include "controllers/KheperaIVStaticDeg.hpp"
 #include "algorithms/StaticDegradationFilterAlpha.hpp"
+#include "algorithms/StaticDegradationFilterBravo.hpp"
 
 KheperaIVStaticDeg::WheelTurningParams::WheelTurningParams() : TurnMech(TurningMechanism::NO_TURN),
                                                                HardTurnOnAngleThreshold(ToRadians(CDegrees(90.0))),
@@ -128,13 +129,12 @@ void KheperaIVStaticDeg::Init(TConfigurationNode &xml_node)
     }
     else if (method == "BRAVO")
     {
-        // sensor_degradation_filter_ptr_ =
-        //     std::make_shared<StaticDegradationFilterBravo>(collective_perception_algo_ptr_);
-        // sensor_degradation_filter_ptr_->GetParamsPtr()->Method = "BRAVO";
-        // std::string type_2_err_prob_str;
-        // GetNodeAttribute(GetNode(static_degradation_filter_node, "params"), "type_2_err_prob", type_2_err_prob_str);
-        // sensor_degradation_filter_ptr_->GetParamsPtr()->FilterSpecificParams = {{"type2ErrProb", type_2_err_prob_str}}; // no filter specific parameters for ALPHA
-        // sensor_degradation_filter_ptr_->GetParamsPtr()->Type2ErrProb = std::stod(type_2_err_prob);
+        sensor_degradation_filter_ptr_ =
+            std::make_shared<StaticDegradationFilterBravo>(collective_perception_algo_ptr_);
+        sensor_degradation_filter_ptr_->GetParamsPtr()->Method = "BRAVO";
+        std::string type_2_err_prob_str;
+        GetNodeAttribute(GetNode(static_degradation_filter_node, "params"), "type_2_err_prob", type_2_err_prob_str);
+        sensor_degradation_filter_ptr_->GetParamsPtr()->FilterSpecificParams = {{"type_2_err_prob", type_2_err_prob_str}};
     }
     else
     {

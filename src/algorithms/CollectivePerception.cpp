@@ -40,6 +40,8 @@ void CollectivePerception::ComputeSocialEstimate(const std::vector<EstConfPair> 
 {
     EstConfPair sum;
 
+    params_ptr_->MostRecentNeighborEstimates = neighbor_vals;
+
     auto lambda = [](const EstConfPair &left, const EstConfPair &right) -> EstConfPair
     {
         return EstConfPair(left.X + right.X * right.Confidence, left.Confidence + right.Confidence);

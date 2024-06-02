@@ -1,6 +1,7 @@
 #include "algorithms/StaticDegradationFilterAlpha.hpp"
 
 StaticDegradationFilterAlpha::StaticDegradationFilterAlpha(const std::shared_ptr<CollectivePerception> &col_per_ptr)
+    : SensorDegradationFilter()
 {
     collective_perception_algo_ptr_ = col_per_ptr;
 }

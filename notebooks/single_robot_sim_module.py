@@ -265,8 +265,7 @@ class SensorFilter1DAlpha:
 
     def estimate(self, est: Estimate, obs: Observation, soc_est):
 
-        est.x = est.x[0]
-        est.covar = est.covar[0]
+        # Not using est parameter
 
         mean_result = self._update(obs, soc_est)
 
@@ -275,7 +274,7 @@ class SensorFilter1DAlpha:
                 np.ones((2,1)) * mean_result,
                 np.zeros((2,1))
             ),
-            (mean_result) # optimization output
+            (mean_result)
         )
 
         return output
@@ -707,6 +706,9 @@ class RobotStaticDegradation(Robot):
         return self.act_sensor_quality
 
     def compute_decision_to_run_filter(self):
+
+        if self.num_neighbors <= 1: return False
+
         score = stats.t.isf((1-self.type_2_err_prob) / 2, df=self.num_neighbors)
 
         lower_bound = self.x_hat - self.x_sample_std * (score / np.sqrt(self.num_neighbors) + 1.0)

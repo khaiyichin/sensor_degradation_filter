@@ -32,6 +32,8 @@ public:
 
     virtual ~SensorDegradationFilter() {}
 
+    virtual void Init() {}
+
     virtual void Reset()
     {
         params_ptr_->Reset();

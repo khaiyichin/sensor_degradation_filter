@@ -32,6 +32,16 @@ public:
             return EstConfPair(X / val, Confidence / val);
         }
 
+        inline EstConfPair operator+(const EstConfPair &obj)
+        {
+            return EstConfPair(this->X + obj.X, this->Confidence + obj.Confidence);
+        }
+
+        inline EstConfPair operator-(const EstConfPair &obj)
+        {
+            return EstConfPair(this->X - obj.X, this->Confidence - obj.Confidence);
+        }
+
         friend inline bool operator==(const EstConfPair &lhs, const EstConfPair &rhs)
         {
             if (lhs.X == rhs.X && lhs.Confidence == rhs.Confidence)
@@ -63,6 +73,8 @@ public:
         unsigned int NumBlackTilesSeen = 0;
 
         unsigned int NumObservations = 0;
+
+        std::vector<EstConfPair> MostRecentNeighborEstimates;
     };
 
     CollectivePerception() : params_ptr_(std::make_shared<Params>()) {}
