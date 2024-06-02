@@ -2,7 +2,7 @@
 
 # This script requires the low-level `sbatch_dynamic_topo_static_deg_run.sh` job script to successfully execute the 
 # dynamic-topology-dynamic-degradation experiments. It iterates over at least 2 parameters: density and filter period.
-# This script is only suitable to run experiments using the ALPHA filter. Additionally, this script whether
+# This script is only suitable to run experiments using the BRAVO filter. Additionally, this script whether
 # also modifies the low-level script on whether to activate the filter for all robots -- that stays constant throughout
 # all iterations. After this script is done with its modifications, the `sbatch_dynamic_topo_static_deg_run.sh` script
 # iterates over the different flawed_acc-correct_acc-TFR-flawed_robot combinations within a single job.
@@ -31,8 +31,6 @@ TYPE_2_ERR_PROB_DEC=(0.05 0.1 0.15 0.2 0.25)
 
 module load slurm
 
-module load slurm
-
 # Modify copied param file
 sed -i "s/CORRECT_FILTER=.*/CORRECT_FILTER=${CORRECT_FILTER}/" ${SBATCH_SCRIPT_TEMPLATE}
 sed -i "s/FLAWED_ROBOT_RANGE=.*/FLAWED_ROBOT_RANGE=(${FLAWED_ROBOT_RANGE[0]} ${FLAWED_ROBOT_RANGE[1]} ${FLAWED_ROBOT_RANGE[2]})/" ${SBATCH_SCRIPT_TEMPLATE}
@@ -54,14 +52,14 @@ do
             sed -i "s/TYPE_2_ERR_PROB=.*/TYPE_2_ERR_PROB=${TYPE_2_ERR_PROB_DEC[k]}/" ${SBATCH_SCRIPT_TEMPLATE}
 
             # Copy param file
-            TARGET_DIR=${CURR_WORKING_DIR}/filtp${FILTER_PERIOD[j]}/den${DENSITY[i]}/alpha
+            TARGET_DIR=${CURR_WORKING_DIR}/filtp${FILTER_PERIOD[j]}/den${DENSITY[i]}/type2err${TYPE_2_ERR_PROB[k]}
             mkdir -p ${TARGET_DIR}
             cp ${SBATCH_SCRIPT_TEMPLATE} ${TARGET_DIR}
             cp ${ARGOSFILE} ${TARGET_DIR}
             pushd ${TARGET_DIR}
             mkdir -p data
 
-            JOB_NAME=${METHOD}${CORRECT_FILTER}_filtp${FILTER_PERIOD[j]}_den${DENSITY[i]}_type2err${TYPE2_ERR_PROB[k]}
+            JOB_NAME=${METHOD}${CORRECT_FILTER}_filtp${FILTER_PERIOD[j]}_den${DENSITY[i]}_type2err${TYPE_2_ERR_PROB[k]}
 
             # Run the job
             # With 5 cases of flawed robots to run in parallel, each using a single core, only about 4G is needed per case, leaving about 1G left for the waiting core

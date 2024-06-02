@@ -7,6 +7,7 @@ import argparse
 import warnings
 import timeit
 import sys
+from joblib import Parallel, delayed
 
 """Saving numpy arrays in HDF files will give a performance warning, so ignoring it"""
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
@@ -19,24 +20,26 @@ def load_data(args):
     """
     json_data_lst = []
 
-    # Receive folder path
-    for root, _, files in os.walk(args.FOLDER):
+    # Parallel implementation of generating StaticDegradationJsonData objects
+    def parallel_generate_json_data_lst(root, files):
 
-        if not files: continue # no files detected (perhaps only folders)
+        if not files: return None # no files detected
         else:
             json_files = [filename.endswith(".json") for filename in files]
             if any(json_files):
                 if args.verbose:
-                    print("Creating a StaticDegradationJsonData object for {0} JSON files in folder={1}...".format(len(json_files), root), end=" ")
+                    print("Creating a StaticDegradationJsonData object for {0} JSON files in folder={1}...".format(len(json_files), root))
                     sys.stdout.flush()
 
-                json_data_lst.append(sdvm.StaticDegradationJsonData(root))
+                return sdvm.StaticDegradationJsonData(root)
 
-                if args.verbose: print("Done!\n")
-            else:
-                continue
+    # Extract JSON data objects in parallel
+    json_data_lst = Parallel(n_jobs=-1, verbose=0)(
+        delayed(parallel_generate_json_data_lst)(root, files) for root, _, files in os.walk(args.FOLDER)
+    )
 
-    return json_data_lst
+    # Clean up the `None`s in the list
+    return [obj for obj in json_data_lst if obj is not None]
 
 def save_to_h5(json_data_lst, args):
     df = pd.DataFrame()
