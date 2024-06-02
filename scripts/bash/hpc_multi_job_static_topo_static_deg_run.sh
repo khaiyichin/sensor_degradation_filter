@@ -10,8 +10,6 @@
 # parameter file serves as an intermediate template parameter file for `sbatch_static_topo_static_deg_run.sh` to modify
 # and make copies.
 
-CURR_WORKING_DIR=bravo_corfilt0
-
 NUM_TRIALS=30
 NUM_STEPS=4.0e+4
 METHOD="BRAVO"
@@ -24,7 +22,7 @@ TYPE2_ERR_PROB_DEC=(0.05 0.1 0.15 0.2 0.25)
 module load slurm
 
 # Copy param_multi_robot_sim_1d_static_degradation.yml to target directory
-TOP_DIR=/home/kchin/sensor-degradation-filter/turing_sim_run_static_topo_static_deg/${CURR_WORKING_DIR}
+TOP_DIR=$(pwd)
 TARGET_PARAM_FILE=param_multi_robot_sim_1d_static_degradation.yml
 PYTHON_VENV_ACT_BIN=/home/kchin/sensor-degradation-filter/.venv/bin/activate
 
@@ -53,7 +51,7 @@ do
             pushd ${TARGET_DIR}
             mkdir -p data
 
-            JOB_NAME=${CURR_WORKING_DIR}_filtp${FILTER_PERIOD[j]}_commsp${COMMS_PERIOD[i]}_type2err${TYPE2_ERR_PROB[k]}
+            JOB_NAME=${METHOD}${CORRECT_FILTER}_filtp${FILTER_PERIOD[j]}_commsp${COMMS_PERIOD[i]}_type2err${TYPE2_ERR_PROB[k]}
 
             # Run the job
 	        sbatch -N 1 -n 8 --mem=8G -p short -o "log_%x_%j.out" -e "log_%x_%j.err" -J ${JOB_NAME} -t 08:00:00 --mail-user=kchin@wpi.edu --mail-type=fail,end sbatch_static_topo_static_deg_run.sh

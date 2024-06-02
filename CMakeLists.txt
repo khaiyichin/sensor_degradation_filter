@@ -4,6 +4,7 @@ project(sensor_degradation_filter)
 
 # Find dependencies
 find_package(ARGoS REQUIRED)
+find_package(GSL REQUIRED)
 
 # Add ARGoS and Buzz information
 include_directories(${CMAKE_SOURCE_DIR} ${ARGOS_INCLUDE_DIRS})

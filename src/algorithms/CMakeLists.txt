@@ -13,5 +13,5 @@ target_include_directories(${PROJECT_NAME}_algorithms
 
 target_link_libraries(${PROJECT_NAME}_algorithms
     PRIVATE
-    gsl
+    GSL::gsl
 )
