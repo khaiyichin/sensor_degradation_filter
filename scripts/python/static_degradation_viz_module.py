@@ -5,9 +5,8 @@ import os
 from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
-from matplotlib.patches import Ellipse
+from matplotlib.patches import Ellipse, Patch
 import scipy.stats as stats
-import multiprocessing
 
 class StaticDegradationJsonData:
     """
@@ -19,12 +18,14 @@ class StaticDegradationJsonData:
     def __init__(self, data_folder: str, silent=True):
         self.first_pass = True
         self.silent = silent
+        self.sim_type = ""
         self.num_correct_robots = []
         self.num_flawed_robots = []
 
         self.load_data(data_folder)
 
     def populate_common_data(self, json_dict):
+        self.sim_type = json_dict["sim_type"]
         self.num_trials = json_dict["num_trials"]
         self.num_robots = json_dict["num_robots"]
         self.num_steps = json_dict["num_steps"]
@@ -35,14 +36,30 @@ class StaticDegradationJsonData:
         self.flawed_sensor_acc_w = json_dict["flawed_sensor_acc_w"]
         self.correct_sensor_acc_b = json_dict["correct_sensor_acc_b"]
         self.correct_sensor_acc_w = json_dict["correct_sensor_acc_w"]
-        self.fully_connected = json_dict["fully_connected"]
         self.correct_robot_filter = json_dict["correct_robot_filter"]
         try:
             self.filter_specific_params = json_dict["filter_specific_params"]
         except Exception as e:
             self.filter_specific_params = None
 
+        # Populate topology specific information
+        if "static_topo" in self.sim_type:
+            self.fully_connected = json_dict["fully_connected"]
+            self.comms_range = None
+            self.meas_period = None
+            self.speed = None
+            self.density = None
+        elif "dynamic_topo" in self.sim_type:
+            self.fully_connected = False
+            self.comms_range = json_dict["comms_range"]
+            self.meas_period = json_dict["meas_period"]
+            self.speed = json_dict["speed"]
+            self.density = np.round(json_dict["density"], 3)
+        else:
+            raise ValueError("Unknown sim_type detected: {0}".format(self.sim_type))
+
     def print_common_data(self):
+        print("sim_type", self.sim_type)
         print("num_trials:", self.num_trials)
         print("num_robots:", self.num_robots)
         print("num_correct_robots:", self.num_correct_robots)
@@ -58,6 +75,10 @@ class StaticDegradationJsonData:
         print("fully_connected:", self.fully_connected)
         print("correct_robot_filter:", self.correct_robot_filter)
         print("filter_specific_params:", self.filter_specific_params)
+        print("comms_range:", self.comms_range)
+        print("meas_period:", self.meas_period)
+        print("speed:", self.speed)
+        print("density:", self.density)
 
     def load_data(self, folder_path):
         """Load the JSON data from a given folder.
@@ -85,8 +106,11 @@ class StaticDegradationJsonData:
                     self.populate_common_data(json_dict)
 
                     # Set up data structure
-                    self.num_correct_robots.append(json_dict["num_correct_robots"])
                     self.num_flawed_robots.append(json_dict["num_flawed_robots"])
+                    try: # DEV NOTE: temporary fix due to dynamic_topo not having this key; in the future this `num_correct_robots` key will be removed because it's inferred
+                        self.num_correct_robots.append(json_dict["num_correct_robots"])
+                    except Exception as e:
+                        self.num_correct_robots.append(self.num_robots - self.num_flawed_robots[-1])
 
                     self.data[json_dict["num_flawed_robots"]] = np.empty(
                         (
@@ -116,13 +140,24 @@ class StaticDegradationJsonData:
             Numpy array of (informed_estimate, sensor_estimate) for all robots across all time steps (dim = num_robots * num_timesteps * 2)
         """
         # data_str_vec is a num_agents x num_steps list of lists
-        return np.asarray(
-            [
+        if "static_topo" in self.sim_type:
+            return np.asarray(
                 [
-                    [float(val) for val in elem.split(",")[2:4]] for elem in row
-                ] for row in data_str_vec
-            ]
-        ) # row = [local_est, social_est, informed_est, sensor_b_est, sensor_w_est]
+                    [
+                        [float(val) for val in elem.split(",")[2:4]] for elem in row
+                    ] for row in data_str_vec
+                ]
+            ) # row = [local_est, social_est, informed_est, sensor_b_est, sensor_w_est]
+        elif "dynamic_topo" in self.sim_type:
+            return np.asarray(
+                [
+                    [
+                        [float(val) for val in elem.split(",")[6:8]] for elem in row
+                    ] for row in data_str_vec
+                ]
+            ) # row = [n, t, local_est, local_conf, social_est, social_conf, informed_est, sensor_b_est, sensor_w_est]
+        else:
+            raise ValueError("Unknown sim_type detected: {0}".format(self.sim_type))
 
 def process_convergence_accuracy(
     json_data_obj: StaticDegradationJsonData,
@@ -177,6 +212,7 @@ def process_convergence_accuracy(
         acc_lst = compute_accuracy(json_data_obj.tfr, inf_est_curves_ndarr, conv_ind_lst)
 
         data = {
+            "sim_type": [json_data_obj.sim_type],
             "num_trials": [json_data_obj.num_trials],
             "num_robots": [json_data_obj.num_robots],
             "num_steps": [json_data_obj.num_steps],
@@ -188,6 +224,10 @@ def process_convergence_accuracy(
             "correct_sensor_acc_b": [json_data_obj.correct_sensor_acc_b],
             "correct_sensor_acc_w": [json_data_obj.correct_sensor_acc_w],
             "fully_connected": [json_data_obj.fully_connected],
+            "comms_range": [json_data_obj.comms_range],
+            "meas_period": [json_data_obj.meas_period],
+            "speed": [json_data_obj.speed],
+            "density": [json_data_obj.density],
             "correct_robot_filter": [json_data_obj.correct_robot_filter],
             "filter_specific_params": [json_data_obj.filter_specific_params],
             "num_flawed_robots": [n],
@@ -294,61 +334,86 @@ def plot_scatter(df: pd.DataFrame, varying_metric_str: str, **kwargs):
     acc_max = -np.inf
 
     median_lst = []
-    varying_metric_vals = list(set(df[varying_metric_str]))
+    varying_metric_vals = []
 
-    for metric_ind, val in enumerate(varying_metric_vals):
+    if varying_metric_str != "filter_specific_params":
+        varying_metric_vals = sorted(list(set(df[varying_metric_str])))
+    else:
+        try:
+            k = kwargs["filter_specific_params_key"]
 
-        df_subset = df.loc[df[varying_metric_str] == val]
-        conv_lst = df_subset["conv_step_ind"] # dim = (num_trials, num_robots)
-        acc_lst = df_subset["accuracies"] # dim = (num_trials, num_robots)
+            if k not in df[varying_metric_str].iloc[0]: raise KeyError("Incorrect \"filter_specific_params_key\".")
+        except Exception:
+            raise KeyError("You need to provide a \"filter_specific_params_key\" argument.")
 
-        # Flatten data
-        conv_lst = [conv_per_rob for conv_per_trial in conv_lst for conv_per_rob in conv_per_trial]
-        acc_lst = [acc_per_rob for acc_per_trial in acc_lst for acc_per_rob in acc_per_trial]
-
-        # Compute minimum and maximum values
-        conv_min = np.amin([conv_min, np.amin(conv_lst)])
-        conv_max = np.amax([conv_max, np.amax(conv_lst)])
-        acc_min = np.amin([acc_min, np.amin(acc_lst)])
-        acc_max = np.amax([acc_max, np.amax(acc_lst)])
-
-        # Calculate median
-        median = (np.median(conv_lst), np.median(acc_lst))
-        median_lst.append(median)
-
-        # Compute interquartile range
-        ellipse_dim = (stats.iqr(conv_lst), stats.iqr(acc_lst))
-        ellipse_quantile_25 = (np.quantile(conv_lst, 0.25), np.quantile(acc_lst, 0.25))
-
-        # Compute center coordinates for the ellipse
-        ellipse_center = (ellipse_quantile_25[0] + ellipse_dim[0]/2, ellipse_quantile_25[1] + ellipse_dim[1]/2)
-
-        # Plot interquartile ellipse
-        ellipse = Ellipse(
-            xy=ellipse_center,
-            width=ellipse_dim[0],
-            height=ellipse_dim[1],
-            facecolor=plt.cm.winter(metric_ind/(len(varying_metric_vals)-1)),
-            alpha=0.2,
+        varying_metric_vals = set(
+            row[k] for row in df[varying_metric_str]
         )
 
-        ax.add_patch(ellipse)
+        varying_metric_vals = sorted(list(varying_metric_vals))
 
-    # Plot median points
-    scatter_x, scatter_y = list(zip(*median_lst))
+    for metric_ind, val in enumerate(varying_metric_vals):
+        median_lst = []
 
-    ax.scatter(
-        scatter_x,
-        scatter_y,
-        c=range(0, len(median_lst)),
-        edgecolor="k",
-        cmap="winter",
-        vmin=0,
-        vmax=len(varying_metric_vals) - 1,
-        marker="o" if "marker" not in kwargs else kwargs["marker"],
-        alpha=1.0,
-        s=65
-    )
+        # Apply specific processing for filter_specific_params
+        if varying_metric_str != "filter_specific_params":
+            df_subset = df.loc[df[varying_metric_str] == val]
+        else:
+            df_subset = df.loc[
+                df[varying_metric_str].apply(lambda x: kwargs["filter_specific_params_key"] in x.keys() and val in x.values())
+            ] # search for rows containing the value based on the specific key
+
+        df_subset.reset_index(drop=True)
+
+        for exp_ind in range(len(df_subset)):
+            conv_lst = df_subset["conv_step_ind"].iloc[exp_ind] # dim = (num_trials, num_robots)
+            acc_lst = df_subset["accuracies"].iloc[exp_ind] # dim = (num_trials, num_robots)
+
+            # Flatten data
+            conv_lst = [conv_per_rob for conv_per_trial in conv_lst for conv_per_rob in conv_per_trial]
+            acc_lst = [acc_per_rob for acc_per_trial in acc_lst for acc_per_rob in acc_per_trial]
+
+            # Compute minimum and maximum values
+            conv_min = np.amin([conv_min, np.amin(conv_lst)])
+            conv_max = np.amax([conv_max, np.amax(conv_lst)])
+            acc_min = np.amin([acc_min, np.amin(acc_lst)])
+            acc_max = np.amax([acc_max, np.amax(acc_lst)])
+
+            # Calculate median
+            median = (np.median(conv_lst), np.median(acc_lst))
+            median_lst.append(median)
+
+            # Compute interquartile range
+            ellipse_dim = (stats.iqr(conv_lst), stats.iqr(acc_lst))
+            ellipse_quantile_25 = (np.quantile(conv_lst, 0.25), np.quantile(acc_lst, 0.25))
+
+            # Compute center coordinates for the ellipse
+            ellipse_center = (ellipse_quantile_25[0] + ellipse_dim[0]/2, ellipse_quantile_25[1] + ellipse_dim[1]/2)
+
+            # Plot interquartile ellipse
+            ellipse = Ellipse(
+                xy=ellipse_center,
+                width=ellipse_dim[0],
+                height=ellipse_dim[1],
+                facecolor=plt.cm.winter(metric_ind/(len(varying_metric_vals)-1)),
+                alpha=0.1,
+                zorder=-1
+            )
+
+            ax.add_patch(ellipse)
+
+        # Plot median points
+        scatter_x, scatter_y = list(zip(*median_lst))
+
+        ax.scatter(
+            scatter_x,
+            scatter_y,
+            facecolor=plt.cm.winter(metric_ind/(len(varying_metric_vals)-1)),
+            edgecolor="k",
+            marker="o" if "marker" not in kwargs else kwargs["marker"],
+            alpha=1.0,
+            s=40
+        )
 
     # Add legend
     legend_elements = []
@@ -378,8 +443,8 @@ def plot_scatter(df: pd.DataFrame, varying_metric_str: str, **kwargs):
     # Set limits
     ax.set_xlabel("Time Steps", fontsize=14)
     ax.set_ylabel("Absolute Error", fontsize=14)
-    ax.set_xlim(-0.02 * df["num_steps"][0], 1.02 * df["num_steps"][0])
-    ax.set_ylim(-0.05, 1.0)
+    if "xlim" in kwargs: ax.set_xlim(kwargs["xlim"])
+    if "ylim" in kwargs: ax.set_ylim(kwargs["ylim"])
 
     # Add grid
     ax.grid("on")
