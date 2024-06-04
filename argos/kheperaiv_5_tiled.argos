@@ -23,7 +23,7 @@
           or set to zero, this value is taken from the clock and a warning
           message is displayed.
     -->
-        <experiment length="50" ticks_per_second="10" random_seed="0" />
+        <experiment length="400" ticks_per_second="10" random_seed="0" />
     </framework>
 
     <!-- *************** -->
@@ -48,7 +48,7 @@
           controller.
     -->
         <kheperaiv_static_deg_controller id="ksdc"
-            library="build/src/controllers/libkheperaiv_static_deg">
+            library="build_argos/src/controllers/libsensor_degradation_filter_controllers">
             <actuators>
                 <differential_steering implementation="default" />
                 <range_and_bearing implementation="default" />
@@ -63,14 +63,17 @@
 
             <params>
                 <diffusion go_straight_angle_range="-5:5" delta="0.1" />
-                <ground_sensor period="10" sensor_acc_b="0.95" sensor_acc_w="0.95" />
-                <comms period="10" />
+                <ground_sensor period_ticks="1" sensor_acc_b="0.95" sensor_acc_w="0.95" />
+                <comms period_ticks="10" />
                 <wheel_turning hard_turn_angle_threshold="90"
                     soft_turn_angle_threshold="70"
                     no_turn_angle_threshold="10"
                     max_speed="10" /> <!-- speed in cm/s -->
-                <static_degradation sim="true"/>
-                <!-- <static_degradation sim="false" assumed_sensor_acc_b="0.75" assumed_sensor_acc_w="0.75" /> -->
+                <static_degradation_filter sim="true" method="BRAVO" period_ticks="100">
+                    <params type_2_err_prob="0.05" /> <!-- BRAVO filter specific parameters -->
+                </static_degradation_filter>
+                <!-- <static_degradation sim="false" assumed_sensor_acc_b="0.75"
+                assumed_sensor_acc_w="0.75" /> -->
             </params>
         </kheperaiv_static_deg_controller>
     </controllers>
@@ -79,17 +82,16 @@
     <!-- * Loop functions * -->
     <!-- ****************** -->
 
-    <loop_functions library="build/src/loop_functions/libsensor_deg_loop_functions"
+    <loop_functions
+        library="build_argos/src/loop_functions/libsensor_degradation_filter_loop_functions"
         label="static_deg_loop_functions">
         <static_degradation>
             <num_trials value="3" />
-            <arena_tiles tile_count_x="50" tile_count_y="50" /> <!-- number of tiles for the arena -->
+            <arena_tiles tile_count_x="500" tile_count_y="500" /> <!-- number of tiles for the arena -->
             <target_fill_ratio value="0.75" /> <!-- range of target fill ratios -->
-            <flawed_robots num="1" acc_b="0.75" acc_w="0.75" />
-            <speed value="14.14" /> <!-- in units of cm/s -->
-            <path folder="data/042324_1446_t3_s500_tfr750_flw1-1-5_flwb950_flww950_corb750_commsp10_filtp10_corfilt0" /> <!--
-            path to the output data and datetime in filename -->
-            <verbosity level="full" /> <!-- "full", "reduced", "none" -->
+            <flawed_robots num="2" acc_b="0.75" acc_w="0.75" activate_filter_for_all="false" />
+            <path folder="data/temp" /> <!-- path to the output data and datetime in filename -->
+            <verbosity level="full" /> <!-- "full", "none" -->
         </static_degradation>
     </loop_functions>
 
@@ -148,7 +150,7 @@
             <position method="uniform" min="-0.9273198961208501,-0.9273198961208501,0"
                 max="0.9273198961208501,0.9273198961208501,0" />
             <orientation method="uniform" min="0,0,0" max="360,0,0" />
-            <entity quantity="3" max_trials="100" base_num="0">
+            <entity quantity="5" max_trials="100" base_num="0">
                 <kheperaiv id="kiv" rab_data_size="50" rab_range="0.7">
                     <controller config="ksdc" />
                 </kheperaiv>

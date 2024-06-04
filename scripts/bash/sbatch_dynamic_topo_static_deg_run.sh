@@ -93,7 +93,7 @@ ARENA_LEN=10
 # (Change this to reflect the above parameters)
 if [[ "${CORRECT_FILTER}" == "true" ]]; then CORFILT=1; else CORFILT=0; fi
 FLW_RANGE=${FLAWED_ROBOT_RANGE[0]}-${FLAWED_ROBOT_RANGE[1]}-${FLAWED_ROBOT_RANGE[2]}
-THISJOB=dynamic_topo_static_deg_alpha_corfilt${CORFILT}_filtp${FILTER_PERIOD}_den${DENSITY}
+THISJOB=dynamic_topo_static_deg
 
 # Job working directory
 # (Don't change this)
