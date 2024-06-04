@@ -219,7 +219,7 @@ void StaticDegLoopFunctions::Init(TConfigurationNode &t_tree)
     }
 
     // Go through the last n number of robots from the back to adjust their assumed sensor accuracies (i.e., only for initially flawed robots)
-    for (size_t i = exp_params_.NumRobots - 1; i >= num_correct_robots; --i)
+    for (size_t i = num_correct_robots; i < exp_params_.NumRobots; ++i)
     {
         CKheperaIVEntity &kheperaiv_entity = *any_cast<CKheperaIVEntity *>(kheperaiv_entities_map_ptr_->at(sorted_robot_ids_[i]));
         KheperaIVStaticDeg &controller = dynamic_cast<KheperaIVStaticDeg &>(kheperaiv_entity.GetControllableEntity().GetController());
