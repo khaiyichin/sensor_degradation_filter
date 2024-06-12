@@ -85,10 +85,9 @@ class MultiRobotSimStaticDegradation:
         self.fully_connected = param.fully_connected
         self.method = param.method
         self.correct_robot_filter = param.correct_robot_filter
-        self.filter_specific_params = param.filter_specific_params
 
         if self.method == "BRAVO":
-            self.filter_specific_params_lst = [float(param.filter_specific_params["type2ErrProb"])]
+            self.filter_specific_params_lst = [float(param.filter_specific_params["type_2_err_prob"])]
         else:
             self.filter_specific_params_lst = [-1.0]
 
@@ -114,7 +113,7 @@ class MultiRobotSimStaticDegradation:
             "method": self.method,
             "trial_ind": self.trial_ind,
             "correct_robot_filter": self.correct_robot_filter,
-            "filter_specific_params": self.filter_specific_params,
+            "filter_specific_params": self.filter_specific_params_lst,
             "data_str": []
         }
 
@@ -215,15 +214,22 @@ class MultiRobotSimStaticDegradation:
         # Log sensor quality
         for ind, robot in enumerate(self.robots):
             est_vals = robot.get_est_sensor_quality()
-            local_est, _ = robot.get_local_estimate()
-            social_est, _ = robot.get_social_estimate()
+            local_est, local_conf = robot.get_local_estimate()
+            social_est, social_conf = robot.get_social_estimate()
+            n, t = robot.get_observations()
 
-            data_str = "{0},{1},{2},{3},{4}".format(
-                np.round(local_est, 3),
-                np.round(social_est, 3),
-                np.round(robot.get_informed_estimate(), 3),
-                np.round(est_vals.x[0,0], 3),
-                np.round(est_vals.x[1,0], 3)
+            data_str = "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},".format(
+                -1, # placholder for the rng seed; this is to mirror the data string in the dynamic topo experiment, but the
+                    # seed in this case isn't useful for us because we can't reproduce the experiment with just the see alone
+                n,
+                t,
+                np.round(local_est, 6),
+                np.round(local_conf, 6),
+                np.round(social_est, 6),
+                np.round(social_conf, 6),
+                np.round(robot.get_informed_estimate(), 6),
+                np.round(est_vals.x[0,0], 6),
+                np.round(est_vals.x[1,0], 6)
             )
 
             self.robot_data_str[ind][t] = data_str

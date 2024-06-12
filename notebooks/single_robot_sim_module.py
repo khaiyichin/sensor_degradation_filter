@@ -619,6 +619,9 @@ class Robot(MinimalisticCollectivePerception):
     def compute_informed_estimate(self):
         self.x = super().informed_estimate(self.x_hat, self.alpha, self.x_bar, self.beta)
 
+    def get_observations(self):
+        return self.obs.n, self.obs.t
+
     def get_local_estimate(self):
         return self.x_hat, self.alpha
 

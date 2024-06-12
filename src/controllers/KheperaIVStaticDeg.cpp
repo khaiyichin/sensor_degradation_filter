@@ -196,7 +196,8 @@ void KheperaIVStaticDeg::Reset()
 
 std::vector<Real> KheperaIVStaticDeg::GetData() const
 {
-    return {static_cast<Real>(collective_perception_algo_ptr_->GetParamsPtr()->NumBlackTilesSeen),
+    return {static_cast<Real>(RNG_ptr_->GetSeed()),
+            static_cast<Real>(collective_perception_algo_ptr_->GetParamsPtr()->NumBlackTilesSeen),
             static_cast<Real>(collective_perception_algo_ptr_->GetParamsPtr()->NumObservations),
             collective_perception_algo_ptr_->GetLocalVals().X,
             collective_perception_algo_ptr_->GetLocalVals().Confidence,

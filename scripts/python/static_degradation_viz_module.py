@@ -25,6 +25,7 @@ class StaticDegradationJsonData:
         self.load_data(data_folder)
 
     def populate_common_data(self, json_dict):
+        self.method = json_dict["method"]
         self.sim_type = json_dict["sim_type"]
         self.num_trials = json_dict["num_trials"]
         self.num_robots = json_dict["num_robots"]
@@ -59,6 +60,7 @@ class StaticDegradationJsonData:
             raise ValueError("Unknown sim_type detected: {0}".format(self.sim_type))
 
     def print_common_data(self):
+        print("method", self.method)
         print("sim_type", self.sim_type)
         print("num_trials:", self.num_trials)
         print("num_robots:", self.num_robots)
@@ -140,24 +142,13 @@ class StaticDegradationJsonData:
             Numpy array of (informed_estimate, sensor_estimate) for all robots across all time steps (dim = num_robots * num_timesteps * 2)
         """
         # data_str_vec is a num_agents x num_steps list of lists
-        if "static_topo" in self.sim_type:
-            return np.asarray(
+        return np.asarray(
+            [
                 [
-                    [
-                        [float(val) for val in elem.split(",")[2:4]] for elem in row
-                    ] for row in data_str_vec
-                ]
-            ) # row = [local_est, social_est, informed_est, sensor_b_est, sensor_w_est]
-        elif "dynamic_topo" in self.sim_type:
-            return np.asarray(
-                [
-                    [
-                        [float(val) for val in elem.split(",")[6:8]] for elem in row
-                    ] for row in data_str_vec
-                ]
-            ) # row = [n, t, local_est, local_conf, social_est, social_conf, informed_est, sensor_b_est, sensor_w_est]
-        else:
-            raise ValueError("Unknown sim_type detected: {0}".format(self.sim_type))
+                    [float(val) for val in elem.split(",")[7:9]] for elem in row
+                ] for row in data_str_vec
+            ]
+        ) # row = [rng_seed, n, t, local_est, local_conf, social_est, social_conf, informed_est, sensor_b_est, sensor_w_est]
 
 def process_convergence_accuracy(
     json_data_obj: StaticDegradationJsonData,
@@ -176,6 +167,7 @@ def process_convergence_accuracy(
 
     Returns:
         A pandas.DataFrame with the following columns:
+            "method",
             "num_trials",
             "num_robots",
             "num_steps",
@@ -212,6 +204,7 @@ def process_convergence_accuracy(
         acc_lst = compute_accuracy(json_data_obj.tfr, inf_est_curves_ndarr, conv_ind_lst)
 
         data = {
+            "method": [json_data_obj.method],
             "sim_type": [json_data_obj.sim_type],
             "num_trials": [json_data_obj.num_trials],
             "num_robots": [json_data_obj.num_robots],

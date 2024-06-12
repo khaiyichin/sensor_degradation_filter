@@ -380,18 +380,39 @@ CColor StaticDegLoopFunctions::GetFloorColor(const CVector2 &c_position_on_plane
 
 std::string StaticDegLoopFunctions::ConvertDataToString(const std::vector<Real> &data)
 {
+    /*
+        The data is in the form:
+        data[0] = random_seed
+        data[1] = num_black_tiles
+        data[2] = num_total_tiles
+        data[3] = x_hat
+        data[4] = alpha
+        data[5] = x_bar
+        data[6] = beta
+        data[7] = x
+        data[8] = sensor_acc_b
+        data[9] = sensor_acc_w
+
+        data[3] onwards contain floating point numbers
+    */
+
     std::stringstream ss;
-    ss.precision(3);
+    ss.precision(0);
     ss << std::fixed;
 
     for (auto itr = data.begin(); itr != data.end(); ++itr)
     {
+        // Increase precision for floating point numbers
+        if (itr-data.begin() == 3)
+        {
+            ss.precision(6);
+            ss << std::fixed;
+        }
+
         ss << *itr << ",";
     }
 
-    ss.str().pop_back(); // remove the last comma
-
-    return ss.str();
+    return ss.str().substr(0, ss.str().size()-1); // return without the last comma
 }
 
 void StaticDegLoopFunctions::ResetRobotPositions()
