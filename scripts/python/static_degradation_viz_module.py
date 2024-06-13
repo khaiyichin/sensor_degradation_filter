@@ -205,7 +205,7 @@ def process_convergence_accuracy(
         acc_lst = compute_accuracy(json_data_obj.tfr, inf_est_curves_ndarr, conv_ind_lst)
 
         # Compute performance score
-        score_lst = compute_performance_score(
+        conv_ind_score_lst, acc_score_lst, aggregate_score_lst = compute_performance_score(
             conv_ind_lst,
             acc_lst,
             json_data_obj.num_steps,
@@ -237,7 +237,9 @@ def process_convergence_accuracy(
             "num_flawed_robots": [n],
             "conv_step_ind": [conv_ind_lst],
             "accuracies": [acc_lst],
-            "scores": [score_lst]
+            "conv_scores": [conv_ind_score_lst],
+            "acc_scores": [acc_score_lst],
+            "agg_scores": [aggregate_score_lst]
         }
 
         df = pd.concat([df, pd.DataFrame(data)], ignore_index=True)
@@ -312,23 +314,52 @@ def compute_performance_score(
     conv_ind_lst: list,
     accuracies_lst: list,
     conv_ind_max_possible_val: float,
-    accuracies_max_possible: float,
+    accuracies_max_possible_val: float,
     overall_scale = 100,
-) -> list:
+):
     """Compute performance scores for a tuple of convergence time and accuracy.
 
     The output score has a maximum of overall_scale and minimum of 0.
 
     Args:
-        conv_ind_lst: List of convergence time indices
-        accuracies_lst: List of accuracies
+        conv_ind_lst: List of convergence time indices (dim = num_trials x num_robots)
+        accuracies_lst: List of accuracies (dim = num_trials x num_robots)
         conv_ind_max_possible_val: Maximum possible value for convergence time; used to scale the exponential function
         accuracies_max_possible: Maximum possible value for accuracy; used to scale the exponential function
+
+    Returns:
+        A tuple containing:
+            a list of scaled individual robot convergence scores for all trials (dim = num_trials x num_robots)
+            a list of scaled individual robot accuracy scores for all trials (dim = num_trials x num_robots)
+            a list of aggregate scores (dim = num_trials)
     """
 
-    return overall_scale / 2.0 * (
-        np.exp(-np.divide(conv_ind_lst, conv_ind_max_possible_val/overall_scale)) +
-        np.exp(-np.divide(accuracies_lst, accuracies_max_possible/overall_scale))
+    # Define functions to compute individual scores and scale factors
+    compute_indi_scores = lambda lst, max_val: overall_scale * (
+        1.0 - np.divide(lst, max_val)
+    )
+    compute_scale_factor = lambda lst, max_val: np.exp(
+        -stats.iqr(lst, axis=1, interpolation="midpoint") / max_val
+    )
+
+    # Compute individual scores
+    individual_conv_ind_scores = compute_indi_scores(conv_ind_lst, conv_ind_max_possible_val) # dim = num_trials x num_robots
+    individual_accuracy_scores = compute_indi_scores(accuracies_lst, accuracies_max_possible_val) # dim = num_trials x num_robots
+
+    # Compute scale factors
+    conv_ind_scale_factor = compute_scale_factor(conv_ind_lst, conv_ind_max_possible_val) # dim = num_trials
+    accuracy_scale_factor = compute_scale_factor(accuracies_lst, accuracies_max_possible_val) # dim = num_trials
+
+    # Compute the combined scores
+    combined_score = 0.5 * (
+        conv_ind_scale_factor * np.mean(individual_conv_ind_scores, axis=1) +
+        accuracy_scale_factor * np.mean(individual_accuracy_scores, axis=1)
+    ) # dim = num_trials
+
+    return (
+        (conv_ind_scale_factor.reshape(-1, 1) * individual_conv_ind_scores).tolist(),
+        (accuracy_scale_factor.reshape(-1, 1) * individual_accuracy_scores).tolist(),
+        combined_score.tolist()
     )
 
 def plot_scatter(df: pd.DataFrame, varying_metric_str: str, **kwargs):
