@@ -154,16 +154,20 @@ def process_convergence_accuracy(
     json_data_obj: StaticDegradationJsonData,
     df: pd.DataFrame = pd.DataFrame(),
     threshold = 0.01,
+    perf_score_max = 100,
 ):
-    """Compute the point in time when convergence is achieved.
+    """Finds the point in time when convergence is achieved and its corresponding accuracy, then computing a performance score.
 
-    This computes the convergence timestep (# of observations) for the informed estimates.
+    This finds the convergence timestep (# of observations) for the informed estimates.
     If the returned value is equal to the number of observations, that means convergence was not achieved.
+    At the time of convergence, the absoulte error is computed as the accuracy.
+    Finally, the convergence timestep and accuracy is combined to compute a performance score.
 
     Args:
         json_data_obj: StaticDegradationJsonData that contains all the data intended for processing.
         df: pd.DataFrame to concatenate the processed data to.
         threshold: A float parametrizing the difference threshold.
+        perf_score_max: Maximum for the performance score. Minimum is 0.
 
     Returns:
         A pandas.DataFrame with the following columns:
@@ -183,12 +187,8 @@ def process_convergence_accuracy(
             "filter_specific_params",
             "num_flawed_robots",
             "conv_step_ind",
-            "accuracies"
-    """
-    """
-    Methodology in computing convergence:
-    Anchor to one point and check all later values to see if difference exceeds threshold,
-    repeat until the earliest anchor point reaches the end uninterrupted.
+            "accuracies",
+            "score"
     """
 
     # json_data_obj.data is a dict with key=num_flawed_robots and value=np.ndarray with dim = (num_flawed_robots, num_trials, num_robots, num_steps+1, 2)
@@ -198,10 +198,21 @@ def process_convergence_accuracy(
 
         inf_est_curves_ndarr = data_ndarr_per_num_flawed_robot[..., 0] # inf_est_curves_ndarr has dim = (num_trials, num_agents, num_steps+1)
 
+        # Detect convergence time
         conv_ind_lst = detect_convergence(threshold, inf_est_curves_ndarr)
 
         # Compute accuracy
         acc_lst = compute_accuracy(json_data_obj.tfr, inf_est_curves_ndarr, conv_ind_lst)
+
+        # Compute performance score
+        score_lst = compute_performance_score(
+            conv_ind_lst,
+            acc_lst,
+            json_data_obj.num_steps,
+            0.45, # this is set because the tested fill ratios are 0.55 <= TFR <= 0.95, so the largest possible abs. error is 0.45
+                  # (because the algo has a singularity at 0.5, the abs. error have so far been capped below 0.45)
+            perf_score_max
+        )
 
         data = {
             "method": [json_data_obj.method],
@@ -225,7 +236,8 @@ def process_convergence_accuracy(
             "filter_specific_params": [json_data_obj.filter_specific_params],
             "num_flawed_robots": [n],
             "conv_step_ind": [conv_ind_lst],
-            "accuracies": [acc_lst]
+            "accuracies": [acc_lst],
+            "scores": [score_lst]
         }
 
         df = pd.concat([df, pd.DataFrame(data)], ignore_index=True)
@@ -295,6 +307,29 @@ def compute_accuracy(
         acc_lst[trial_ind] = err
 
     return acc_lst # acc_lst has dim = (num_trials, num_robots)
+
+def compute_performance_score(
+    conv_ind_lst: list,
+    accuracies_lst: list,
+    conv_ind_max_possible_val: float,
+    accuracies_max_possible: float,
+    overall_scale = 100,
+) -> list:
+    """Compute performance scores for a tuple of convergence time and accuracy.
+
+    The output score has a maximum of overall_scale and minimum of 0.
+
+    Args:
+        conv_ind_lst: List of convergence time indices
+        accuracies_lst: List of accuracies
+        conv_ind_max_possible_val: Maximum possible value for convergence time; used to scale the exponential function
+        accuracies_max_possible: Maximum possible value for accuracy; used to scale the exponential function
+    """
+
+    return overall_scale / 2.0 * (
+        np.exp(-np.divide(conv_ind_lst, conv_ind_max_possible_val/overall_scale)) +
+        np.exp(-np.divide(accuracies_lst, accuracies_max_possible/overall_scale))
+    )
 
 def plot_scatter(df: pd.DataFrame, varying_metric_str: str, **kwargs):
     """Create a scatter plot based on the convergence and accuracy metrics.
