@@ -412,7 +412,7 @@ def process_decision(
     decision_dfs = []
 
     # Iterate through each case of # of flawed robots
-    for n, data_ndarr_per_num_flawed_robot in json_data_obj.data.items():
+    def parallel_obtain_decision_fraction(n, data_ndarr_per_num_flawed_robot):
 
         inf_est_curves_ndarr = data_ndarr_per_num_flawed_robot[..., 0] # inf_est_curves_ndarr has dim = (num_trials, num_agents, num_steps+1)
 
@@ -447,10 +447,11 @@ def process_decision(
             "decision_fraction": decision_arr
         }
 
-        # Store DataFrame
-        decision_dfs.append(
-            pd.DataFrame(data)
-        )
+        return pd.DataFrame(data)
+
+    decision_dfs = Parallel(n_jobs=-1, verbose=0)(
+        delayed(parallel_obtain_decision_fraction)(n, data_ndarr_per_num_flawed_robot) for n, data_ndarr_per_num_flawed_robot in json_data_obj.data.items()
+    )
 
     return pd.concat(decision_dfs, axis=0, ignore_index=True)
 
