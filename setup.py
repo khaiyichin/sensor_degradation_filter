@@ -10,6 +10,7 @@ setuptools.setup(
     packages=["notebooks", "scripts.python"],
     scripts=[
         "scripts/python/run_static_degradation_experiment.py",
-        "scripts/python/extract_convergence_accuracy_data.py"
+        "scripts/python/extract_convergence_accuracy_data.py",
+        "scripts/python/extract_decision_data.py"
     ]
 )

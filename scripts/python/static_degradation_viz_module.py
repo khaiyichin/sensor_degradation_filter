@@ -334,21 +334,25 @@ def compute_performance_score(
             a list of aggregate scores (dim = num_trials)
     """
 
+    # Equate NaNs to max_value (only applicable to accuracies) and convert to numpy ndarray
+    accuracies_arr = np.nan_to_num(accuracies_lst, nan=accuracies_max_possible_val)
+    conv_ind_arr = np.asarray(conv_ind_lst)
+
     # Define functions to compute individual scores and scale factors
-    compute_indi_scores = lambda lst, max_val: overall_scale * (
-        1.0 - np.divide(lst, max_val)
+    compute_indi_scores = lambda arr, max_val: overall_scale * (
+        1.0 - np.divide(arr, max_val)
     )
-    compute_scale_factor = lambda lst, max_val: np.exp(
-        -stats.iqr(lst, axis=1, interpolation="midpoint") / max_val
+    compute_scale_factor = lambda arr, max_val: np.exp(
+        -stats.iqr(arr, axis=1, interpolation="midpoint") / max_val
     )
 
     # Compute individual scores
-    individual_conv_ind_scores = compute_indi_scores(conv_ind_lst, conv_ind_max_possible_val) # dim = num_trials x num_robots
-    individual_accuracy_scores = compute_indi_scores(accuracies_lst, accuracies_max_possible_val) # dim = num_trials x num_robots
+    individual_conv_ind_scores = compute_indi_scores(conv_ind_arr, conv_ind_max_possible_val) # dim = num_trials x num_robots
+    individual_accuracy_scores = compute_indi_scores(accuracies_arr, accuracies_max_possible_val) # dim = num_trials x num_robots
 
     # Compute scale factors
-    conv_ind_scale_factor = compute_scale_factor(conv_ind_lst, conv_ind_max_possible_val) # dim = num_trials
-    accuracy_scale_factor = compute_scale_factor(accuracies_lst, accuracies_max_possible_val) # dim = num_trials
+    conv_ind_scale_factor = compute_scale_factor(conv_ind_arr, conv_ind_max_possible_val) # dim = num_trials
+    accuracy_scale_factor = compute_scale_factor(accuracies_arr, accuracies_max_possible_val) # dim = num_trials
 
     # Compute the combined scores
     combined_score = 0.5 * (
@@ -361,6 +365,113 @@ def compute_performance_score(
         (accuracy_scale_factor.reshape(-1, 1) * individual_accuracy_scores).tolist(),
         combined_score.tolist()
     )
+
+def process_decision(
+    json_data_obj: StaticDegradationJsonData,
+    num_bins = 10,
+    step_inc = 5000
+):
+    """Process the data to obtain the swarm's fraction of correct decision.
+
+    The columns that represent the time series decision fraction data would appear
+    as follows:
+
+    +----+---------------+-------------------+-------------------------|
+    ...  | "trial_index" |  "decision_time"  |  "decision_fraction"    |
+    +----+---------------+-------------------+-------------------------|
+    ...  |  trial_ind_1  |  decision_time_1  |  decision_fraction_11   |
+    ...  |  trial_ind_1  |  decision_time_2  |  decision_fraction_12   |
+    ...  |  trial_ind_1  |  decision_time_3  |  decision_fraction_13   |
+    ...  |  trial_ind_1  |  ...              |  decision_fraction_1... |
+    ...  |  trial_ind_1  |  decision_time_n  |  decision_fraction_1n   |
+    ...  |  trial_ind_2  |  decision_time_1  |  decision_fraction_21   |
+    ...  |  trial_ind_2  |  decision_time_2  |  decision_fraction_21   |
+    ...  |  trial_ind_2  |  decision_time_3  |  decision_fraction_21   |
+    ...  |  trial_ind_2  |  ...              |  decision_fraction_2... |
+    ...  |  trial_ind_2  |  decision_time_n  |  decision_fraction_2n   |
+    ...  |  ...          |  ...              |  decision_fraction_...  |
+    ...  |  trial_ind_m  |  decision_time_1  |  decision_fraction_m1   |
+    ...  |  trial_ind_m  |  decision_time_2  |  decision_fraction_m2   |
+    ...  |  trial_ind_m  |  decision_time_3  |  decision_fraction_m3   |
+    ...  |  trial_ind_m  |  ...              |  decision_fraction_m... |
+    ...  |  trial_ind_m  |  decision_time_n  |  decision_fraction_mn   |
+
+
+    Args:
+        json_data_obj: Object that contains experiment data
+        num_bins: Number of bins to split the interval [0, 1] into so that estimates can be converted to decisions
+        step_inc: Simulation step period to evaluate decisions
+    Returns:
+        Pandas DataFrame that contain decision data of all trials within json_data_obj
+    """
+    # json_data_obj.data is a dict with key=num_flawed_robots and value=np.ndarray with dim = (num_flawed_robots, num_trials, num_robots, num_steps+1, 2)
+
+    # Calculate the timesteps at which the decision is obtained
+    decision_time = list(range(step_inc, json_data_obj.num_steps+1, step_inc))
+
+    decision_dfs = []
+
+    # Iterate through each case of # of flawed robots
+    for n, data_ndarr_per_num_flawed_robot in json_data_obj.data.items():
+
+        inf_est_curves_ndarr = data_ndarr_per_num_flawed_robot[..., 0] # inf_est_curves_ndarr has dim = (num_trials, num_agents, num_steps+1)
+
+        # Compute decision fractions
+        decision_arr = compute_decision(inf_est_curves_ndarr, json_data_obj.tfr, num_bins, decision_time)
+
+        # Create data dict
+        data = {
+            "method": np.repeat(json_data_obj.method, len(decision_time) * json_data_obj.num_trials),
+            "sim_type": np.repeat(json_data_obj.sim_type, len(decision_time) * json_data_obj.num_trials),
+            "num_trials": np.repeat(json_data_obj.num_trials, len(decision_time) * json_data_obj.num_trials),
+            "num_robots": np.repeat(json_data_obj.num_robots, len(decision_time) * json_data_obj.num_trials),
+            "num_steps": np.repeat(json_data_obj.num_steps, len(decision_time) * json_data_obj.num_trials),
+            "comms_period": np.repeat(json_data_obj.comms_period, len(decision_time) * json_data_obj.num_trials),
+            "fully_connected": np.repeat(json_data_obj.fully_connected, len(decision_time) * json_data_obj.num_trials),
+            "comms_range": np.repeat(json_data_obj.comms_range, len(decision_time) * json_data_obj.num_trials),
+            "meas_period": np.repeat(json_data_obj.meas_period, len(decision_time) * json_data_obj.num_trials),
+            "speed": np.repeat(json_data_obj.speed, len(decision_time) * json_data_obj.num_trials),
+            "density": np.repeat(json_data_obj.density, len(decision_time) * json_data_obj.num_trials),
+            "correct_robot_filter": np.repeat(json_data_obj.correct_robot_filter, len(decision_time) * json_data_obj.num_trials),
+            "filter_specific_params": np.repeat(json_data_obj.filter_specific_params, len(decision_time) * json_data_obj.num_trials),
+            "sensor_filter_period": np.repeat(json_data_obj.sensor_filter_period, len(decision_time) * json_data_obj.num_trials),
+            "tfr": np.repeat(json_data_obj.tfr, len(decision_time) * json_data_obj.num_trials),
+            "flawed_sensor_acc_b": np.repeat(json_data_obj.flawed_sensor_acc_b, len(decision_time) * json_data_obj.num_trials),
+            "flawed_sensor_acc_w": np.repeat(json_data_obj.flawed_sensor_acc_w, len(decision_time) * json_data_obj.num_trials),
+            "correct_sensor_acc_b": np.repeat(json_data_obj.correct_sensor_acc_b, len(decision_time) * json_data_obj.num_trials),
+            "correct_sensor_acc_w": np.repeat(json_data_obj.correct_sensor_acc_w, len(decision_time) * json_data_obj.num_trials),
+            "density": np.repeat(json_data_obj.density, len(decision_time) * json_data_obj.num_trials),
+            "num_flawed_robots": np.repeat(n, len(decision_time) * json_data_obj.num_trials),
+            "trial_index": np.repeat(range(json_data_obj.num_trials), len(decision_time)),
+            "decision_time": np.tile(decision_time, json_data_obj.num_trials),
+            "decision_fraction": decision_arr
+        }
+
+        # Store DataFrame
+        decision_dfs.append(
+            pd.DataFrame(data)
+        )
+
+    return pd.concat(decision_dfs, axis=0, ignore_index=True)
+
+def compute_decision(curves_ndarr, target_fill_ratio, num_bins, decision_time):
+
+    # Create bins for the estimates
+    bin_arr = np.linspace(0.0, 1.0, num_bins+1) # linspace gives the "checkpoints" for the bins, thus the bins are actually between each values
+
+    # Define correct bin decision
+    correct_bin = np.digitize(target_fill_ratio, bin_arr) # the output is between 1 to the number of bins, i.e., 1st bin, 2nd bin, etc.
+
+    # Extract estimates
+    estimates = curves_ndarr[:,:,decision_time]
+
+    # Convert estimates to decisions
+    decisions = np.digitize(estimates, bin_arr) # dim = (num_trials, num_robots, len(decision_time))
+
+    # Count the fraction of correct decisions
+    fractions = np.count_nonzero(decisions == correct_bin, axis=1) / curves_ndarr.shape[1] # dim = (num_trials, len(decision_time))
+
+    return fractions.flatten() # dim = num_trials * len(decision_time)
 
 def plot_scatter(df: pd.DataFrame, varying_metric_str: str, **kwargs):
     """Create a scatter plot based on the convergence and accuracy metrics.
