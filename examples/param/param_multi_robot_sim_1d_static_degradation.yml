@@ -17,6 +17,6 @@ numTrials: 2 # number of trials to repeat for each parameter
 fullyConnected: True # whether to use a fully connected network or select neighbors using a right-skewed binomial distribution
 method: "BRAVO" # sensor filter method
 filterSpecificParams:
-  type2ErrProb: 0.1
+  type_2_err_prob: 0.1
 correctFilter: False # run the filter for robots that have the correct initial accuracy
 ...
