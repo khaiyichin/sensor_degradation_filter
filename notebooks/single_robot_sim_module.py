@@ -256,7 +256,7 @@ class SensorFilter1DAlpha:
         num = (obs.n / obs.t + soc_est - 1.0)
         denom = (2*soc_est - 1)
 
-        if num > denom: return 9.99999e-1
+        if num >= denom: return 9.99999e-1
         elif num < 0.0: return 1e-6
         else:
             updated_mean_result = num / denom

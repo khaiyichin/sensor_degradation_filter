@@ -7,6 +7,9 @@ import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 from matplotlib.patches import Ellipse, Patch
 import scipy.stats as stats
+import plotly.express as px
+import plotly.graph_objects as go
+# from IPython.display import display, HTML
 
 class StaticDegradationJsonData:
     """
@@ -624,3 +627,296 @@ def plot_scatter(df: pd.DataFrame, varying_metric_str: str, **kwargs):
     print("Accuracy error minimum: {0}, maximum: {1}".format(acc_min, acc_max))
 
     return fig, ax
+
+################################################################################
+# Expand the lists in the aggregate score column into multiple rows
+################################################################################
+
+def expand_scores(target_df, csv_filename=None):
+    """Expand the `agg_scores` column into single-element rows and add accuracy difference column
+    """
+
+    dfs = [
+        pd.DataFrame() for _ in range(len(target_df.index))
+    ]
+    params_only_dfs = target_df.drop([
+        "conv_step_ind",
+        "accuracies",
+        "conv_scores",
+        "acc_scores",
+        "agg_scores"
+    ], axis=1) # dataframe containing only parameter columns
+
+    # Go through each row to expand the `agg_scores` column
+    for ind, row in enumerate(target_df.itertuples()):
+        current_score_df = pd.DataFrame({"agg_scores": row.agg_scores})
+
+        # Check for NaNs (should never be true)
+        if current_score_df.isnull().values.any():
+            print("NaNs found in the {0}-th row!".format(ind))
+            break
+
+        # Repeat the current parameters
+        current_params_df = params_only_dfs.loc[[ind]]
+        repeated_current_params_df = current_params_df.loc[
+            current_params_df.index.repeat(row.num_trials)
+        ].reset_index(drop=True)
+
+        # Combine parameter rows with data rows
+        dfs[ind] = pd.concat([repeated_current_params_df, current_score_df], axis=1)
+
+    # Combine all into a single DataFrame
+    final_df = pd.concat(dfs, axis=0, ignore_index=True)
+
+    # Save a CSV copy of the new DataFrame
+    if csv_filename: final_df.to_csv(csv_filename, index=False)
+
+    return final_df
+
+################################################################################
+################################################################################
+
+
+
+################################################################################
+# Add a column for the difference between actual and assumed accuracies
+################################################################################
+
+def compute_diff(target_df, csv_filename=None):
+    """Create a column that records the difference between acutal and assumed accuracies
+    """
+    target_df["acc_diff"] = np.round(target_df["flawed_sensor_acc_b"] - target_df["correct_sensor_acc_b"], 3)
+
+    # Save a CSV copy of the new DataFrame
+    if csv_filename: target_df.to_csv(csv_filename, index=False)
+
+    return target_df
+
+################################################################################
+################################################################################
+
+
+
+################################################################################
+# Add a column for the percentage of flawed robot quantity
+################################################################################
+def compute_flawed_percentage(target_df, csv_filename=None):
+
+    num_flawed_robots_lst = target_df["num_flawed_robots"].unique()
+
+    target_df["num_flawed_robots_pct"] = target_df["num_flawed_robots"].replace(
+        {
+            old_val: old_val * 100 // target_df["num_robots"].iat[0]
+            for old_val in num_flawed_robots_lst
+        }
+    )
+
+    # Save a CSV copy of the new DataFrame
+    if csv_filename: target_df.to_csv(csv_filename, index=False)
+
+    return target_df
+
+################################################################################
+################################################################################
+
+
+
+################################################################################
+# Create a boxplot figure
+################################################################################
+
+# # Workaround to enable LaTeX in Plotly figures using VSCode
+# # see: https://github.com/microsoft/vscode-jupyter/issues/8131#issuecomment-1589961116
+# plotly.offline.init_notebook_mode()
+# display(HTML(
+#     "<script type='text/javascript' async src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_SVG'></script>"
+# ))
+
+COLOR_BLIND_FRIENDLY_COLORS_DICT = {
+    "black": "#000000",
+    "orange": "#E69F00",
+    "sky_blue": "#56B4E9",
+    "green": "#009E73",
+    "yellow": "#F0E442",
+    "blue": "#0072B2",
+    "vermillion": "#D55E00",
+    "pink": "#CC79A7"
+}
+
+def plot_boxplot_plotly(
+    target_df,
+    y_key: str,
+    x1_key: str,
+    color_key: str,
+    **kwargs
+):
+    """
+
+    Args:
+        target_df: Pandas DataFrame containing the data to plot.
+        y_key: Key to the `df` column that represents the y-axis.
+        x1_key: Key to the `df` column that represents the outer x-axis.
+        color_key: Key to the `df` column for the boxes, to be each plotted as
+            a different color within a single (x1-x2) combination.
+        kwargs: Specific keyword arguments
+
+    Returns:
+        Handle to the created boxplot figure.
+    """
+
+    x2_key = None
+    x2_labels = None
+    x2_values = None
+    if "x2_key" in kwargs: x2_key = kwargs["x2_key"]
+
+    # Create copy of data
+    df = pd.DataFrame(target_df, copy=True)
+
+    # Get spacing values
+    x1_spacing = 0.35 if "x1_spacing" not in kwargs else kwargs["x1_spacing"]
+    x2_spacing = 0.15 if "x2_spacing" not in kwargs else kwargs["x2_spacing"]
+
+    # Apply offset for x1 group (absolute)
+    x1_values = sorted(df[x1_key].unique(), reverse=False if "x1_reverse" not in kwargs else kwargs["x1_reverse"])
+    df["x1 offset"] = df[x1_key].replace(
+        {
+            k: np.round(ind*x1_spacing, 2)
+            for ind, k in enumerate(x1_values)
+        }
+    )
+
+    # Apply offset for x2 group (relative to x1 group)
+    if x2_key:
+        x2_placement = {}
+        x2_values = sorted(df[x2_key].unique(), reverse=False if "x2_reverse" not in kwargs else kwargs["x2_reverse"])
+
+        # Check if there are x2 values that need special treatment
+        x2_special_val = np.nan # for special case
+
+        if "x2_special_val" in kwargs:
+            x2_special_val = x2_values.pop(x2_values.index(kwargs["x2_special_val"]))
+            x2_placement.update({x2_special_val: 0.0})
+
+        x2_placement.update({
+            k: np.round(ind*x2_spacing - ((len(x2_values)-1) * x2_spacing/2), 2) # centers about the x1 label
+            for ind, k in enumerate(x2_values)
+        })
+
+        df["x2 offset"] = df[x2_key].replace(x2_placement)
+
+        # Create column for overall offset values
+        df["x_axis_locations"] = df["x1 offset"] + df["x2 offset"]
+    else:
+        df["x_axis_locations"] = df["x1 offset"]
+
+    # Create box plot
+    fig = px.box(
+        df,
+        x="x_axis_locations",
+        y=y_key,
+        color=color_key,
+        color_discrete_sequence=COLOR_BLIND_FRIENDLY_COLORS_DICT.values() if "box_colors" not in kwargs else kwargs["box_colors"],
+        category_orders=None if "category_orders" not in kwargs else kwargs["category_orders"],
+        points="outliers",
+        title=None if "title" not in kwargs or ("show_title" in kwargs and not kwargs["show_title"]) else kwargs["title"],
+    )
+
+    # Modify IQR method
+    fig.update_traces(quartilemethod="inclusive" if "quartilemethod" not in kwargs else kwargs["quartilemethod"])  # Or "inclusive"
+
+    # Update axes labels
+    x1_labels = [
+        "{0}{1}{2}".format("" if "x1_label_prefix" not in kwargs else kwargs["x1_label_prefix"], v, "" if "x1_label_suffix" not in kwargs else kwargs["x1_label_suffix"])
+        for v in x1_values
+    ]
+    if x2_key:
+        x2_labels = [
+            "{0}{1}{2}".format("" if "x2_label_prefix" not in kwargs else kwargs["x2_label_prefix"], v, "" if "x2_label_suffix" not in kwargs else kwargs["x2_label_suffix"])
+            for v in x2_values
+        ]
+
+    # Update layout for better visibility
+    fig.update_layout(
+        boxgroupgap=0.15 if "boxgroupgap" not in kwargs else kwargs["boxgroupgap"],
+        xaxis_title_standoff=10,  # Adjust space between axis title and axis labels
+        margin=dict(l=5, r=5, t=5 if ("show_title" in kwargs and kwargs["show_title"] == False) or "title" not in kwargs else 40, b=5),  # Adjust margins for better spacing
+        yaxis=go.layout.YAxis(
+            title=None if "y_title" not in kwargs or ("show_y" in kwargs and not kwargs["show_y"]) else kwargs["y_title"] ,
+            mirror="ticks",
+            showline=True,
+            linewidth=1,
+            linecolor="black",
+            titlefont={"size": 26},
+            ticks="outside",
+            tickprefix="",
+            ticksuffix=" ",
+            tickfont={"size": 25 if "main_tick_font_size" not in kwargs else kwargs["main_tick_font_size"]},
+            range=None if "y_lim" not in kwargs else kwargs["y_lim"],
+            minor={"showgrid": True},
+            showticklabels=True if "show_y" not in kwargs else kwargs["show_y"],
+            gridcolor="#bbbbbb",
+            gridwidth=1,
+            zerolinecolor="#bbbbbb",
+            zerolinewidth=1
+        ),
+        xaxis=go.layout.XAxis(
+            mirror=True,
+            showline=True,
+            linewidth=1,
+            linecolor="black",
+            tickvals=[
+                df.loc[df[x1_key] == val, "x1 offset"].iat[0]
+                for val in x1_values
+            ],
+            ticktext=x1_labels,
+            ticks="outside",
+            tickfont={"size": 25 if "main_tick_font_size" not in kwargs else kwargs["main_tick_font_size"]},
+            ticklen=6,
+            title="" if "x1_title" not in kwargs or ("show_x1" in kwargs and not kwargs["show_x1"]) else kwargs["x1_title"],
+            titlefont={"size": 26},
+            showticklabels=True if "show_x1" not in kwargs else kwargs["show_x1"]
+        ), # Explicit tick values and labels
+        xaxis2=go.layout.XAxis(
+            overlaying="x",
+            ticks="inside",
+            ticklabelposition="inside",
+            tickcolor="rgba(0,0,0,0.0)",
+            ticklen=5,
+            tickvals=[
+                df.loc[
+                    (df[x1_key] == x1_val) & (df[x2_key] == x2_val),
+                    "x_axis_locations"
+                ].iat[0]
+                for x1_val in x1_values for x2_val in x2_values if ((df[x1_key] == x1_val) & (df[x2_key] == x2_val)).any() # to prevent calling iat[0] when the dataframe cannot find the match of x1_val and x2_val
+            ],
+            ticktext=np.tile(x2_labels, len(x1_values)).tolist(),
+            tickfont={"size": 24 if "x2_tick_font_size" not in kwargs else kwargs["x2_tick_font_size"]},
+        ) if x2_key else None,
+        legend=go.layout.Legend(
+            title="" if "legend_title" not in kwargs else kwargs["legend_title"],
+            font={"size": 15},
+            orientation="h",
+            xref="container",
+            yref="container",
+            x=None if "legend_x" not in kwargs else kwargs["legend_x"],
+            y=None if "legend_y" not in kwargs else kwargs["legend_y"]
+        ),
+        showlegend=True if "show_legend" not in kwargs else kwargs["show_legend"]
+    )
+
+    # Place an invisible trace on the inner x-axis, to avoid automatic hiding of the axis
+    if x2_key: fig.add_trace(
+        go.Bar(x=df["x_axis_locations"],y=np.zeros(len(df)), xaxis="x2", opacity=0.0, showlegend=False)
+    )
+
+    fig.show()
+
+    if "output_path" in kwargs:
+        fig.write_image(
+            kwargs["output_path"],
+            width=1300,
+            height=650,
+            scale=2.0
+        )
+
+    return fig
