@@ -15,17 +15,17 @@ void StaticDegradationFilterAlpha::Estimate()
          static_cast<double>(collective_perception_algo_ptr_->GetParamsPtr()->NumObservations)) +
         social_est - 1.0;
 
-    double denominator = 2 * social_est - 1;
+    double denominator = 2.0 * social_est - 1.0;
 
     if (numerator >= denominator)
     {
-        params_ptr_->AssumedSensorAcc["b"] = 9.99999e-1; // make it almost 1 to prevent numerical errors
-        params_ptr_->AssumedSensorAcc["w"] = 9.99999e-1;
+        params_ptr_->AssumedSensorAcc["b"] = 1.0 - ZERO_APPROX; // make it almost 1 to prevent numerical errors
+        params_ptr_->AssumedSensorAcc["w"] = 1.0 - ZERO_APPROX;
     }
     else if (numerator <= 0.0)
     {
-        params_ptr_->AssumedSensorAcc["b"] = 1e-6; // make it non-zero to prevent numerical errors
-        params_ptr_->AssumedSensorAcc["w"] = 1e-6;
+        params_ptr_->AssumedSensorAcc["b"] = ZERO_APPROX; // make it non-zero to prevent numerical errors
+        params_ptr_->AssumedSensorAcc["w"] = ZERO_APPROX;
     }
     else
     {

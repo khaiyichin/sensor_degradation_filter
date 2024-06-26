@@ -8,6 +8,8 @@
 #include <unordered_map>
 #include <memory>
 
+#define ZERO_APPROX 1.0e-6
+
 class CollectivePerception
 {
 public:
@@ -17,7 +19,7 @@ public:
          * @brief Construct a new EstConfPair struct
          *
          */
-        EstConfPair() : Id(""), X(0.0), Confidence(0.0) {}
+        EstConfPair() : Id(""), X(0.0), Confidence(ZERO_APPROX) {}
 
         /**
          * @brief Construct a new EstConfPair struct
@@ -81,7 +83,7 @@ public:
 
     void Reset()
     {
-        local_vals_ = EstConfPair(0.5, 0.0);
+        local_vals_ = EstConfPair(0.5, ZERO_APPROX);
         social_vals_ = EstConfPair();
         informed_vals_ = EstConfPair();
         params_ptr_->Reset();
@@ -102,7 +104,7 @@ public:
     std::shared_ptr<Params> GetParamsPtr() const { return params_ptr_; }
 
 private:
-    EstConfPair local_vals_ = EstConfPair(0.5, 0.0); ///< Local values
+    EstConfPair local_vals_ = EstConfPair(0.5, ZERO_APPROX); ///< Local values
 
     EstConfPair social_vals_ = EstConfPair(); ///< Social values
 

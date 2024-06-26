@@ -197,7 +197,7 @@ class MultiRobotSimStaticDegradation:
 
                 if selected_quantity > 0:
                     indices = [i for i in range(self.num_robots) if i != ind] if self.fully_connected else np.random.randint(0, self.num_robots, selected_quantity)
-                    x_hat_arr, alpha_arr = zip(*[est_conf_tuple for i, est_conf_tuple in enumerate(local_est) if i != ind and i in indices])
+                    x_hat_arr, alpha_arr = zip(*[est_conf_tuple for i, est_conf_tuple in enumerate(local_est) if i in indices])
                     robot.compute_social_estimate(x_hat_arr, alpha_arr)
 
         # Do informed estimation

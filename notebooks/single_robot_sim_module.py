@@ -257,7 +257,7 @@ class SensorFilter1DAlpha:
         denom = (2*soc_est - 1)
 
         if num >= denom: return 9.99999e-1
-        elif num < 0.0: return 1e-6
+        elif num <= 0.0: return 1e-6
         else:
             updated_mean_result = num / denom
 
@@ -547,6 +547,9 @@ class MinimalisticCollectivePerception:
         else:
             x_hat = (obs.n / obs.t + sensor_w - 1.0) / np.sqrt(q)
             alpha = q * obs.t**3 / (obs.n * obs.complement)
+
+        # Prevent numerical errors
+        if alpha == 0: alpha = 1e-6
 
         return x_hat, alpha
     

@@ -34,6 +34,12 @@ void CollectivePerception::ComputeLocalEstimate(const double &sensor_acc_b, cons
             local_vals_.Confidence = (std::pow(t, 3) * std::pow(sensor_acc_b + sensor_acc_w - 1.0, 2)) / (h * (t - h));
         }
     }
+
+    // Modify confidence values to be non-zero to prevent numerical errors
+    if (local_vals_.Confidence == 0.0)
+    {
+        local_vals_.Confidence = ZERO_APPROX;
+    }
 }
 
 void CollectivePerception::ComputeSocialEstimate(const std::vector<EstConfPair> &neighbor_vals)
@@ -50,20 +56,12 @@ void CollectivePerception::ComputeSocialEstimate(const std::vector<EstConfPair> 
     sum = std::accumulate(neighbor_vals.begin(), neighbor_vals.end(), EstConfPair(0.0, 0.0), lambda);
 
     // Assign the averages as social values
-    social_vals_.X = (sum.Confidence == 0.0) ? 0.0 : sum.X / sum.Confidence;
+    social_vals_.X = sum.X / sum.Confidence;
     social_vals_.Confidence = sum.Confidence;
 }
 
 void CollectivePerception::ComputeInformedEstimate()
 {
-    if (local_vals_.Confidence == 0.0 && social_vals_.Confidence == 0.0)
-    {
-        informed_vals_.X = local_vals_.X;
-    }
-    else
-    {
-        informed_vals_.X = (local_vals_.Confidence * local_vals_.X + social_vals_.Confidence * social_vals_.X) / (local_vals_.Confidence + social_vals_.Confidence);
-    }
-
+    informed_vals_.X = (local_vals_.Confidence * local_vals_.X + social_vals_.Confidence * social_vals_.X) / (local_vals_.Confidence + social_vals_.Confidence);
     informed_vals_.Confidence = local_vals_.Confidence + social_vals_.Confidence;
 }

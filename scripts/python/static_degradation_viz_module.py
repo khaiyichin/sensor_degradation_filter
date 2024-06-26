@@ -632,7 +632,58 @@ def plot_scatter(df: pd.DataFrame, varying_metric_str: str, **kwargs):
 # Expand the lists in the aggregate score column into multiple rows
 ################################################################################
 
-def expand_scores(target_df, csv_filename=None):
+def expand_indi_scores(target_df, csv_filename=None):
+    """Expand the individual accuracy and convergence scores into respective single-element rows and add accuracy difference column
+    """
+
+    dfs = [
+        pd.DataFrame() for _ in range(len(target_df.index))
+    ]
+    params_only_dfs = target_df.drop([
+        "conv_step_ind",
+        "accuracies",
+        "conv_scores",
+        "acc_scores",
+        "agg_scores"
+    ], axis=1) # dataframe containing only parameter columns
+
+    # Go through each row to expand the `indi_scores` column
+    for ind, row in enumerate(target_df.itertuples()):
+        current_conv_score_df = pd.DataFrame({"conv_scores": np.mean(row.conv_scores, axis=1)})
+        current_acc_score_df = pd.DataFrame({"acc_scores": np.mean(row.acc_scores, axis=1)})
+
+        # Check for NaNs (should never be true)
+        if current_conv_score_df.isnull().values.any() or current_acc_score_df.isnull().values.any():
+            print()
+            raise ValueError("NaNs found in the {0}-th row!".format(ind))
+
+        # Repeat the current parameters
+        current_params_df = params_only_dfs.loc[[ind]]
+        repeated_current_params_df = current_params_df.loc[
+            current_params_df.index.repeat(row.num_trials)
+        ].reset_index(drop=True)
+
+        # Combine parameter rows with data rows
+        dfs[ind] = pd.concat([repeated_current_params_df, current_conv_score_df, current_acc_score_df], axis=1)
+
+    # Combine all into a single DataFrame
+    final_df = pd.concat(dfs, axis=0, ignore_index=True)
+
+    # Save a CSV copy of the new DataFrame
+    if csv_filename: final_df.to_csv(csv_filename, index=False)
+
+    return final_df
+
+################################################################################
+################################################################################
+
+
+
+################################################################################
+# Expand the lists in the aggregate score column into multiple rows
+################################################################################
+
+def expand_agg_scores(target_df, csv_filename=None):
     """Expand the `agg_scores` column into single-element rows and add accuracy difference column
     """
 
@@ -809,17 +860,34 @@ def plot_boxplot_plotly(
     else:
         df["x_axis_locations"] = df["x1 offset"]
 
-    # Create box plot
-    fig = px.box(
-        df,
-        x="x_axis_locations",
-        y=y_key,
-        color=color_key,
-        color_discrete_sequence=COLOR_BLIND_FRIENDLY_COLORS_DICT.values() if "box_colors" not in kwargs else kwargs["box_colors"],
-        category_orders=None if "category_orders" not in kwargs else kwargs["category_orders"],
-        points="outliers",
-        title=None if "title" not in kwargs or ("show_title" in kwargs and not kwargs["show_title"]) else kwargs["title"],
-    )
+    fig = go.Figure()
+
+    # Check for category orders if we need to order the color_key
+    if "category_orders" in kwargs:
+        for k, v in kwargs["category_orders"].items():
+            df[k] = pd.Categorical(
+                df[k], categories=v, ordered=True
+            )
+
+        # Sort the columns
+        df.sort_values(by=list(kwargs["category_orders"].keys()), inplace=True)
+
+    # Plot each trace, iterating by color
+    for ind, trace_val in enumerate(df[color_key].unique()):
+        current_df = df.loc[df[color_key] == trace_val]
+
+        box_trace = go.Box(
+            y=current_df[y_key].values,
+            x=current_df["x_axis_locations"].values,
+            name=trace_val,
+            marker_color=None if "box_colors" not in kwargs else kwargs["box_colors"][ind],
+            whiskerwidth=0.8,
+            marker={
+                "size": 15 if "marker_size" not in kwargs else kwargs["marker_size"]
+            }
+        )
+
+        fig.add_trace(box_trace)
 
     # Modify IQR method
     fig.update_traces(quartilemethod="inclusive" if "quartilemethod" not in kwargs else kwargs["quartilemethod"])  # Or "inclusive"
@@ -837,19 +905,19 @@ def plot_boxplot_plotly(
 
     # Update layout for better visibility
     fig.update_layout(
-        boxgroupgap=0.15 if "boxgroupgap" not in kwargs else kwargs["boxgroupgap"],
+        boxmode="group",
+        boxgroupgap=0.1 if "boxgroupgap" not in kwargs else kwargs["boxgroupgap"],
         xaxis_title_standoff=10,  # Adjust space between axis title and axis labels
-        margin=dict(l=5, r=5, t=5 if ("show_title" in kwargs and kwargs["show_title"] == False) or "title" not in kwargs else 40, b=5),  # Adjust margins for better spacing
+        margin=dict(l=3, r=3, t=3 if ("show_title" in kwargs and kwargs["show_title"] == False) or "title" not in kwargs else 40, b=3),  # Adjust margins for better spacing
         yaxis=go.layout.YAxis(
             title=None if "y_title" not in kwargs or ("show_y" in kwargs and not kwargs["show_y"]) else kwargs["y_title"] ,
             mirror="ticks",
             showline=True,
             linewidth=1,
             linecolor="black",
-            titlefont={"size": 26},
             ticks="outside",
             tickprefix="",
-            ticksuffix=" ",
+            ticksuffix="",
             tickfont={"size": 25 if "main_tick_font_size" not in kwargs else kwargs["main_tick_font_size"]},
             range=None if "y_lim" not in kwargs else kwargs["y_lim"],
             minor={"showgrid": True},
@@ -857,7 +925,8 @@ def plot_boxplot_plotly(
             gridcolor="#bbbbbb",
             gridwidth=1,
             zerolinecolor="#bbbbbb",
-            zerolinewidth=1
+            zerolinewidth=1,
+            side="left" if "y_side" not in kwargs else kwargs["y_side"]
         ),
         xaxis=go.layout.XAxis(
             mirror=True,
@@ -874,7 +943,8 @@ def plot_boxplot_plotly(
             ticklen=6,
             title="" if "x1_title" not in kwargs or ("show_x1" in kwargs and not kwargs["show_x1"]) else kwargs["x1_title"],
             titlefont={"size": 26},
-            showticklabels=True if "show_x1" not in kwargs else kwargs["show_x1"]
+            showticklabels=True if "show_x1" not in kwargs else kwargs["show_x1"],
+            side="bottom" if "x1_side" not in kwargs else kwargs["x1_side"]
         ), # Explicit tick values and labels
         xaxis2=go.layout.XAxis(
             overlaying="x",
@@ -891,6 +961,7 @@ def plot_boxplot_plotly(
             ],
             ticktext=np.tile(x2_labels, len(x1_values)).tolist(),
             tickfont={"size": 24 if "x2_tick_font_size" not in kwargs else kwargs["x2_tick_font_size"]},
+            side="bottom" if "x2_side" not in kwargs else kwargs["x2_side"]
         ) if x2_key else None,
         legend=go.layout.Legend(
             title="" if "legend_title" not in kwargs else kwargs["legend_title"],
