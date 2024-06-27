@@ -113,6 +113,12 @@ public:
         }
     }
 
+    inline void SetRNGSeed(const UInt32 &seed)
+    {
+        RNG_ptr_->SetSeed(seed);
+        RNG_ptr_->Reset();
+    }
+
     void SetLEDs(const CColor &color);
 
     void ActivateDegradationFilter() { sensor_degradation_filter_ptr_->GetParamsPtr()->RunDegradationFilter = true; }

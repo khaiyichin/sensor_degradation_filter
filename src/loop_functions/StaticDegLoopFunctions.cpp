@@ -259,6 +259,9 @@ void StaticDegLoopFunctions::SetupExperiment()
         CKheperaIVEntity &kheperaiv_entity = *any_cast<CKheperaIVEntity *>(kheperaiv_entities_map_ptr_->at(sorted_robot_ids_[i]));
         KheperaIVStaticDeg &controller = dynamic_cast<KheperaIVStaticDeg &>(kheperaiv_entity.GetControllableEntity().GetController());
 
+        // Set the robots' RNG seed (based on top-level seed + ID)
+        controller.SetRNGSeed(GetSimulator().GetRandomSeed() + i);
+
         // Convert and store data string
         id_data_str_map_[kheperaiv_entity.GetId()].push_back(ConvertDataToString(controller.GetData()));
     }
@@ -341,6 +344,7 @@ void StaticDegLoopFunctions::InitializeJSON()
 {
     curr_json_ = ordered_json{};
     curr_json_["sim_type"] = "dynamic_topo_static_deg_1d";
+    curr_json_["seed"] = GetSimulator().GetRandomSeed();
     curr_json_["num_robots"] = exp_params_.NumRobots;
     curr_json_["num_flawed_robots"] = exp_params_.NumFlawedRobots;
     curr_json_["num_trials"] = exp_params_.NumTrials;

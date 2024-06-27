@@ -53,7 +53,7 @@ void CollectivePerception::ComputeSocialEstimate(const std::vector<EstConfPair> 
         return EstConfPair(left.X + right.X * right.Confidence, left.Confidence + right.Confidence);
     };
 
-    sum = std::accumulate(neighbor_vals.begin(), neighbor_vals.end(), EstConfPair(0.0, 0.0), lambda);
+    sum = std::accumulate(neighbor_vals.begin(), neighbor_vals.end(), EstConfPair(0.0, ZERO_APPROX), lambda);
 
     // Assign the averages as social values
     social_vals_.X = sum.X / sum.Confidence;
