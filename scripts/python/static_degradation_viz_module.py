@@ -207,13 +207,16 @@ def process_convergence_accuracy(
         # Compute accuracy
         acc_lst = compute_accuracy(json_data_obj.tfr, inf_est_curves_ndarr, conv_ind_lst)
 
+        # Get maximum values for convergence time step and accuracy
+        max_conv_ind = np.max(conv_ind_lst)
+        max_acc = np.max(acc_lst)
+
         # Compute performance score
         conv_ind_score_lst, acc_score_lst, aggregate_score_lst = compute_performance_score(
             conv_ind_lst,
             acc_lst,
-            json_data_obj.num_steps,
-            0.45, # this is set because the tested fill ratios are 0.55 <= TFR <= 0.95, so the largest possible abs. error is 0.45
-                  # (because the algo has a singularity at 0.5, the abs. error have so far been capped below 0.45)
+            max_conv_ind,
+            max_acc,
             perf_score_max
         )
 
@@ -239,7 +242,9 @@ def process_convergence_accuracy(
             "filter_specific_params": [json_data_obj.filter_specific_params],
             "num_flawed_robots": [n],
             "conv_step_ind": [conv_ind_lst],
+            "max_conv_step": [max_conv_ind],
             "accuracies": [acc_lst],
+            "max_acc": [max_acc],
             "conv_scores": [conv_ind_score_lst],
             "acc_scores": [acc_score_lst],
             "agg_scores": [aggregate_score_lst]
@@ -783,7 +788,7 @@ def compute_flawed_percentage(target_df, csv_filename=None):
 #     "<script type='text/javascript' async src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_SVG'></script>"
 # ))
 
-COLOR_BLIND_FRIENDLY_COLORS_DICT = {
+COLOR_BLIND_FRIENDLY_COLORS_DICT_HEX = {
     "black": "#000000",
     "orange": "#E69F00",
     "sky_blue": "#56B4E9",
@@ -792,6 +797,17 @@ COLOR_BLIND_FRIENDLY_COLORS_DICT = {
     "blue": "#0072B2",
     "vermillion": "#D55E00",
     "pink": "#CC79A7"
+}
+
+COLOR_BLIND_FRIENDLY_COLORS_DICT_RGBA = {
+    "black": "rgba(0, 0, 0, 255)",
+    "orange": "rgba(230, 159, 0, 255)",
+    "sky_blue": "rgba(86, 180, 233, 255)",
+    "green": "rgba(0, 158, 115, 255)",
+    "yellow": "rgba(240, 228, 66, 255)",
+    "blue": "rgba(0, 114, 178, 255)",
+    "vermillion": "rgba(213, 94, 0, 255)",
+    "pink": "rgba(204, 121, 167, 255)"
 }
 
 def plot_boxplot_plotly(
