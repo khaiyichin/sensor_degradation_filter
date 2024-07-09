@@ -613,6 +613,31 @@ def plot_scatter(df: pd.DataFrame, varying_metric_str: str, **kwargs):
     return fig, ax
 
 ################################################################################
+# Verify that DataFrame rows are as expected
+################################################################################
+
+def verify_df_rows(df: pd.DataFrame, expected_num_rows):
+    """Verify that the number of rows in the DataFrame matches expectation.
+    """
+
+    actual_num_rows = len(df)
+
+    if  actual_num_rows!= expected_num_rows:
+        df.info()
+        print("\nColumn = Unique Values:")
+        [print("{0} = {1}".format(col, df[col].unique())) for col in df.columns if col != "agg_scores" and df[col].dtype != object]
+        raise ValueError("Actual # of rows don't match the expected #: {0} != {1}".format(actual_num_rows, expected_num_rows))
+    else:
+        print(
+            "Actual # of rows vs Expected # of rows: {0} == {1}".format(actual_num_rows, expected_num_rows)
+        )
+
+################################################################################
+################################################################################
+
+
+
+################################################################################
 # Expand the lists in the aggregate score column into multiple rows
 ################################################################################
 
@@ -638,7 +663,6 @@ def expand_indi_scores(target_df, csv_filename=None):
 
         # Check for NaNs (should never be true)
         if current_conv_score_df.isnull().values.any() or current_acc_score_df.isnull().values.any():
-            print()
             raise ValueError("NaNs found in the {0}-th row!".format(ind))
 
         # Repeat the current parameters
@@ -980,9 +1004,139 @@ def plot_boxplot_plotly(
     if "output_path" in kwargs:
         fig.write_image(
             kwargs["output_path"],
-            width=1300,
-            height=650,
-            scale=2.0
+            width=1300 if "fig_width" not in kwargs else kwargs["fig_width"],
+            height=650 if "fig_height" not in kwargs else kwargs["fig_height"],
+            scale=2.0 if "fig_scale" not in kwargs else kwargs["fig_scale"]
         )
 
     return fig
+
+################################################################################
+################################################################################
+
+
+
+################################################################################
+# Create a scatter plot
+################################################################################
+
+def plot_scatter_plotly(
+    target_df,
+    y_key: str,
+    x_key: str,
+    color_key: str,
+    **kwargs
+):
+    """
+
+    Args:
+        target_df: Pandas DataFrame containing the data to plot.
+        y_key: Key to the `df` column that represents the y-axis.
+        x_key: Key to the `df` column that represents the x-axis.
+        color_key: Key to the `df` column for the colors
+        kwargs: Specific keyword arguments
+
+    Returns:
+        Handle to the created scatter plot figure.
+    """
+
+    # Create copy of data
+    df = pd.DataFrame(target_df, copy=True)
+
+    fig = px.scatter(
+        df,
+        x=x_key,
+        y=y_key,
+        color=color_key,
+        symbol=None if "symbol_key" not in kwargs else kwargs["symbol_key"],
+        category_orders=None if "category_orders" not in kwargs else kwargs["category_orders"],
+        width=650*1.05 if "show_legend" not in kwargs or not kwargs["show_legend"] else 650,
+        height=650*1.05 if "show_legend" not in kwargs or not kwargs["show_legend"] else 650,
+        color_discrete_sequence=px.colors.diverging.Portland,
+    )
+
+    fig.update_traces(
+        marker={
+            "size": 12,
+            "line": {
+                "width": 1,
+                "color": "black"
+            }
+        } if "marker" not in kwargs else kwargs["marker"]
+    )
+
+    # Update layout for better visibility
+    fig.update_layout(
+        title=None if "title" not in kwargs or ("show_title" in kwargs and not kwargs["show_title"]) else kwargs["title"],
+        xaxis_title_standoff=10,  # Adjust space between axis title and axis labels
+        margin=dict(l=3, r=3, t=3 if ("show_title" in kwargs and kwargs["show_title"] == False) or "title" not in kwargs else 40, b=3),  # Adjust margins for better spacing
+        yaxis=go.layout.YAxis(
+            title=None if "y_title" not in kwargs or ("show_y" in kwargs and not kwargs["show_y"]) else kwargs["y_title"] ,
+            titlefont={"size": 25},
+            mirror="ticks",
+            showline=True,
+            linewidth=1,
+            linecolor="black",
+            ticks="outside",
+            tickprefix="",
+            ticksuffix=" ",
+            tickfont={"size": 26 if "main_tick_font_size" not in kwargs else kwargs["main_tick_font_size"]},
+            range=None if "y_lim" not in kwargs else kwargs["y_lim"],
+            minor={"showgrid": True},
+            showticklabels=True if "show_y" not in kwargs else kwargs["show_y"],
+            gridcolor="#bbbbbb",
+            gridwidth=1,
+            zerolinecolor="#bbbbbb",
+            zerolinewidth=1,
+            scaleanchor="x",
+            scaleratio=1,
+            side="left" if "y_side" not in kwargs else kwargs["y_side"]
+        ),
+        xaxis=go.layout.XAxis(
+            mirror="ticks",
+            showline=True,
+            linewidth=1,
+            linecolor="black",
+            ticks="outside",
+            tickfont={"size": 25},
+            ticklen=6,
+            title="" if "x_title" not in kwargs or ("show_x" in kwargs and not kwargs["show_x"]) else kwargs["x_title"],
+            titlefont={"size": 26},
+            range=None if "x_lim" not in kwargs else kwargs["x_lim"],
+            minor={"showgrid": True},
+            showticklabels=True if "show_x" not in kwargs else kwargs["show_x"],
+            gridcolor="#bbbbbb",
+            gridwidth=1,
+            zerolinecolor="#bbbbbb",
+            zerolinewidth=1,
+            scaleanchor="y",
+            scaleratio=1
+        ), # Explicit tick values and labels
+        legend=go.layout.Legend(
+            title="" if "legend_title" not in kwargs else kwargs["legend_title"],
+            font={"size": 18},
+            orientation="h",
+            xref="container",
+            yref="container",
+            x=None if "legend_x" not in kwargs else kwargs["legend_x"],
+            y=None if "legend_y" not in kwargs else kwargs["legend_y"],
+            itemsizing="constant",
+        ),
+        showlegend=True if "show_legend" not in kwargs else kwargs["show_legend"],
+        coloraxis_showscale=True if "show_legend" not in kwargs else kwargs["show_legend"]
+    )
+
+    fig.show()
+
+    if "output_path" in kwargs:
+        fig.write_image(
+            kwargs["output_path"],
+            width=650 if "fig_width" not in kwargs else kwargs["fig_width"],
+            height=650 if "fig_height" not in kwargs else kwargs["fig_height"],
+            scale=1.0
+        )
+
+    return fig
+
+################################################################################
+################################################################################
