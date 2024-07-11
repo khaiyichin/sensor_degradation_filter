@@ -863,7 +863,7 @@ def plot_boxplot_plotly(
         # Check if there are x2 values that need special treatment
         x2_special_val = np.nan # for special case
 
-        if "x2_special_val" in kwargs:
+        if "x2_special_val" in kwargs and kwargs["x2_special_val"] is not None:
             x2_special_val = x2_values.pop(x2_values.index(kwargs["x2_special_val"]))
             x2_placement.update({x2_special_val: 0.0})
 
@@ -903,7 +903,8 @@ def plot_boxplot_plotly(
             whiskerwidth=0.8,
             marker={
                 "size": 15 if "marker_size" not in kwargs else kwargs["marker_size"]
-            }
+            },
+            line={"width": 3}
         )
 
         fig.add_trace(box_trace)
@@ -926,7 +927,6 @@ def plot_boxplot_plotly(
     fig.update_layout(
         boxmode="group",
         boxgroupgap=0.1 if "boxgroupgap" not in kwargs else kwargs["boxgroupgap"],
-        xaxis_title_standoff=10,  # Adjust space between axis title and axis labels
         margin=dict(l=3, r=3, t=3 if ("show_title" in kwargs and kwargs["show_title"] == False) or "title" not in kwargs else 40, b=3),  # Adjust margins for better spacing
         yaxis=go.layout.YAxis(
             title=None if "y_title" not in kwargs or ("show_y" in kwargs and not kwargs["show_y"]) else kwargs["y_title"] ,
@@ -935,11 +935,12 @@ def plot_boxplot_plotly(
             linewidth=1,
             linecolor="black",
             ticks="outside",
-            tickprefix="",
-            ticksuffix="",
-            tickfont={"size": 25 if "main_tick_font_size" not in kwargs else kwargs["main_tick_font_size"]},
+            dtick=25 if "y_dtick" not in kwargs else kwargs["y_dtick"],
+            tickprefix=None if "y_label_prefix" not in kwargs else kwargs["y_label_prefix"],
+            ticksuffix=None if "y_label_suffix" not in kwargs else kwargs["y_label_suffix"],
+            tickfont={"size": 25 if "y_tick_font_size" not in kwargs else kwargs["y_tick_font_size"]},
             range=None if "y_lim" not in kwargs else kwargs["y_lim"],
-            minor={"showgrid": True},
+            minor={"showgrid": False},
             showticklabels=True if "show_y" not in kwargs else kwargs["show_y"],
             gridcolor="#bbbbbb",
             gridwidth=1,
@@ -958,10 +959,9 @@ def plot_boxplot_plotly(
             ],
             ticktext=x1_labels,
             ticks="outside",
-            tickfont={"size": 25 if "main_tick_font_size" not in kwargs else kwargs["main_tick_font_size"]},
+            tickfont={"size": 25 if "x1_tick_font_size" not in kwargs else kwargs["x1_tick_font_size"]},
             ticklen=6,
-            title="" if "x1_title" not in kwargs or ("show_x1" in kwargs and not kwargs["show_x1"]) else kwargs["x1_title"],
-            titlefont={"size": 26},
+            title=None if "x1_title" not in kwargs or ("show_x1" in kwargs and not kwargs["show_x1"]) else kwargs["x1_title"],
             showticklabels=True if "show_x1" not in kwargs else kwargs["show_x1"],
             side="bottom" if "x1_side" not in kwargs else kwargs["x1_side"]
         ), # Explicit tick values and labels
@@ -983,7 +983,7 @@ def plot_boxplot_plotly(
             side="bottom" if "x2_side" not in kwargs else kwargs["x2_side"]
         ) if x2_key else None,
         legend=go.layout.Legend(
-            title="" if "legend_title" not in kwargs else kwargs["legend_title"],
+            title=None if "legend_title" not in kwargs else kwargs["legend_title"],
             font={"size": 15},
             orientation="h",
             xref="container",
@@ -1001,7 +1001,7 @@ def plot_boxplot_plotly(
 
     fig.show()
 
-    if "output_path" in kwargs:
+    if "output_path" in kwargs and kwargs["output_path"] is not None:
         fig.write_image(
             kwargs["output_path"],
             width=1300 if "fig_width" not in kwargs else kwargs["fig_width"],
