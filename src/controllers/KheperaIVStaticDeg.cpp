@@ -377,7 +377,7 @@ void KheperaIVStaticDeg::SetWheelSpeedsFromVector(const CVector2 &heading_vector
     Real heading_length = heading_vector.Length();
 
     /* Clamp the speed so that it's not greater than MaxSpeed */
-    Real base_wheel_spd = Min<Real>(heading_length, wheel_turning_params_.MaxSpeed); // DEBUG THIS: why doesn't this clamp heading length to max speed during rotation?
+    Real base_wheel_spd = Min<Real>(heading_length, wheel_turning_params_.MaxSpeed);
 
     /* State transition logic */
     if (wheel_turning_params_.TurnMech == WheelTurningParams::TurningMechanism::HARD_TURN)
@@ -458,8 +458,8 @@ void KheperaIVStaticDeg::SetWheelSpeedsFromVector(const CVector2 &heading_vector
     }
 
     /* Finally, set the wheel speeds */
-    left_wheel_spd = Min<Real>(left_wheel_spd, wheel_turning_params_.MaxSpeed);   // DEBUG THIS: why doesn't this clamp heading length to max speed during rotation?
-    right_wheel_spd = Min<Real>(right_wheel_spd, wheel_turning_params_.MaxSpeed); // DEBUG THIS: why doesn't this clamp heading length to max speed during rotation?
+    left_wheel_spd = Min<Real>(left_wheel_spd, wheel_turning_params_.MaxSpeed);
+    right_wheel_spd = Min<Real>(right_wheel_spd, wheel_turning_params_.MaxSpeed);
 
     ci_wheels_ptr_->SetLinearVelocity(left_wheel_spd, right_wheel_spd);
 }

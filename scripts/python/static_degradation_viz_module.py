@@ -9,7 +9,11 @@ from matplotlib.patches import Ellipse, Patch
 import scipy.stats as stats
 import plotly.express as px
 import plotly.graph_objects as go
-# from IPython.display import display, HTML
+
+
+################################################################################
+# Class to extract JSON data for static degradation experiments
+################################################################################
 
 class StaticDegradationJsonData:
     """
@@ -148,10 +152,184 @@ class StaticDegradationJsonData:
         return np.asarray(
             [
                 [
-                    [float(val) for val in elem.split(",")[7:9]] for elem in row
+                    [float(val) for val in elem.split(",")[7:9]] for elem in row # extract 2 values
                 ] for row in data_str_vec
             ]
         ) # row = [rng_seed, n, t, local_est, local_conf, social_est, social_conf, informed_est, sensor_b_est, sensor_w_est]
+
+################################################################################
+################################################################################
+
+
+
+################################################################################
+# Class to extract specific JSON data for static degradation experiments
+################################################################################
+
+# Dictionary of keywords that matches to the column index within the numpy array in the JSON object
+DATA_KEYWORD_TO_DATA_COLUMN_INDEX_DICT = {
+    "n": 1,
+    "t": 2,
+    "local_estimate": 3,
+    "local_confidence": 4,
+    "social_estimate": 5,
+    "social_confidence": 6,
+    "informed_estimate": 7,
+    "assumed_accuracy_b": 8,
+    "assumed_accuracy_w": 9
+}
+
+class StaticDegradationJsonDataSpecific(StaticDegradationJsonData):
+    """
+    This class is the same as StaticDegradationJsonData, except that it only stores one specific type of data.
+    Users can use this class to get a specific data (using the data_keyword argument).
+
+    The available options for data_keyword are:
+        "n",
+        "t",
+        "local_estimate",
+        "local_confidence",
+        "social_estimate",
+        "social_confidence",
+        "informed_estimate",
+        "assumed_accuracy_b", and
+        "assumed_accuracy_w".
+    """
+
+    def __init__(self, data_folder: str, data_keyword: str, silent=True):
+        if data_keyword not in DATA_KEYWORD_TO_DATA_COLUMN_INDEX_DICT:
+            raise KeyError("The provided keyword is not found.")
+        else:
+            self.data_col_index = DATA_KEYWORD_TO_DATA_COLUMN_INDEX_DICT[data_keyword]
+            self.data_type = data_keyword
+
+        super().__init__(data_folder, silent)
+
+    def decode_data_str(self, data_str_vec):
+        """Decodes the array of data string.
+
+        Args:
+            data_str_vec: List of lists of data string for all robots (across all time steps) in a single trial
+
+        Returns:
+            Numpy array of a single column (based on the desired data) for all robots across all time steps (dim = num_robots * num_timesteps * 2)
+        """
+        # data_str_vec is a num_agents x num_steps list of lists
+        return np.asarray(
+            [
+                [
+                    [float(elem.split(",")[self.data_col_index])] for elem in row
+                ] for row in data_str_vec
+            ]
+        ) # row = [rng_seed, n, t, local_est, local_conf, social_est, social_conf, informed_est, sensor_b_est, sensor_w_est]
+
+################################################################################
+################################################################################
+
+
+def extract_raw_data_to_dfs(
+    json_data_obj: StaticDegradationJsonData,
+):
+    """Extract raw data into a list of Pandas DataFrames, each of which covers all trials for a single num_flawed_robots case.
+
+    This is specifically when one desires to analyze the data at each time step.
+
+    Returns:
+        If json_data_obj is of type StaticDegradationJsonDataSpecific, this returns a list containing DataFrames
+        of the flattened data contained within json_data_obj.
+        Otherwise, this returns a tuple of two lists of DataFrames, one for the informed estimate data and the other
+        the sensor estimate data.
+    """
+
+    def flatten_into_df(ndarr_data):
+
+        # Extract the data for each trial into a single dictionary, then store into a list of dictionaries
+        data_dict_per_trial_lst = [
+            {"robot{0}".format(robot_ind): inner_arr for robot_ind, inner_arr in enumerate(arr)} for arr in ndarr_data # each dict has dim = (num_agents, num_steps+1)
+        ] # dim = num_trials
+
+        # Concatenate the trial and timestep indices into the list of dictionaries
+        data_dict_per_trial_lst = [
+            {
+                **{
+                    "trial_ind": np.repeat(trial_ind, json_data_obj.num_steps+1),
+                    "step_ind": np.arange(json_data_obj.num_steps+1)
+                },
+                **data_dict_per_robot
+            } for trial_ind, data_dict_per_robot in enumerate(data_dict_per_trial_lst)
+        ]
+
+        # Create DataFrames organized by trials; each trial is one DataFrame object
+        trial_dfs = [
+            pd.DataFrame(
+                data_dict_per_robot
+            )
+            for data_dict_per_robot in data_dict_per_trial_lst
+        ]
+
+        return trial_dfs
+
+    # Check if it's a specific version of the JSON data object
+    specific = False
+    tuple_of_df_lst = ([], [])
+
+    if type(json_data_obj) == StaticDegradationJsonDataSpecific:
+        specific = True
+
+    # Iterate through different cases of flawed robots
+    for n, data_ndarr_per_num_flawed_robot in json_data_obj.data.items():
+
+        # Extract the current parameters
+        current_params_dict = {
+            "method": [json_data_obj.method],
+            "sim_type": [json_data_obj.sim_type],
+            "num_trials": [json_data_obj.num_trials],
+            "num_robots": [json_data_obj.num_robots],
+            "num_steps": [json_data_obj.num_steps],
+            "sensor_filter_period": [json_data_obj.sensor_filter_period],
+            "comms_period": [json_data_obj.comms_period],
+            "tfr": [json_data_obj.tfr],
+            "flawed_sensor_acc_b": [json_data_obj.flawed_sensor_acc_b],
+            "flawed_sensor_acc_w": [json_data_obj.flawed_sensor_acc_w],
+            "correct_sensor_acc_b": [json_data_obj.correct_sensor_acc_b],
+            "correct_sensor_acc_w": [json_data_obj.correct_sensor_acc_w],
+            "fully_connected": [json_data_obj.fully_connected],
+            "comms_range": [json_data_obj.comms_range],
+            "meas_period": [json_data_obj.meas_period],
+            "speed": [json_data_obj.speed],
+            "density": [json_data_obj.density],
+            "correct_robot_filter": [json_data_obj.correct_robot_filter],
+            "filter_specific_params": [json_data_obj.filter_specific_params],
+            "num_flawed_robots": [n],
+        }
+        current_params_df = pd.DataFrame(current_params_dict)
+        repeated_current_params_df = current_params_df.loc[
+            current_params_df.index.repeat(json_data_obj.num_trials * (json_data_obj.num_steps+1))
+        ].reset_index(drop=True)
+
+        # Flatten the data
+        data_curves_ndarr = data_ndarr_per_num_flawed_robot[..., 0] # data_curves_ndarr has dim = (num_trials, num_agents, num_steps+1)
+
+        data_trial_dfs = flatten_into_df(data_curves_ndarr)
+
+        # Combine data for all trials of the current num_flawed_robots case into a single DataFrame, then store it into the main list of DataFrames
+        tuple_of_df_lst[0].append(
+            pd.concat([repeated_current_params_df, pd.concat(data_trial_dfs, axis=0, ignore_index=True)], axis=1)
+        )
+
+        # Extract another column's data if not specific JSON data type (which means that data_ndarr_per_num_flawed_robot has informed estimate and sensor estimate data)
+        if not specific:
+            # Flatten the data
+            data_curves_ndarr = data_ndarr_per_num_flawed_robot[..., 1] # data_curves_ndarr has dim = (num_trials, num_agents, num_steps+1)
+
+            data_trial_dfs = flatten_into_df(data_curves_ndarr)
+
+            tuple_of_df_lst[1].append(
+                pd.concat([repeated_current_params_df, pd.concat(data_trial_dfs, axis=0, ignore_index=True)], axis=1)
+            )
+
+    return tuple_of_df_lst if not specific else tuple_of_df_lst[0]
+
 
 def process_convergence_accuracy(
     json_data_obj: StaticDegradationJsonData,
@@ -638,11 +816,64 @@ def verify_df_rows(df: pd.DataFrame, expected_num_rows):
 
 
 ################################################################################
-# Expand the lists in the aggregate score column into multiple rows
+# Expand the numpy arrays in the raw convergence step index and accuracies columns into multiple rows
+################################################################################
+
+def expand_raw_conv_acc(target_df, csv_filename=None):
+    """Expand the raw convergence and absolute errors into respective single-element rows
+    """
+
+    dfs = [
+        pd.DataFrame() for _ in range(len(target_df.index))
+    ]
+    params_only_dfs = target_df.drop([
+        "conv_step_ind",
+        "accuracies",
+    ], axis=1) # dataframe containing only parameter columns
+
+    # Go through each row to expand the `conv_step_ind` and `accuracies` columns
+    for ind, row in enumerate(target_df.itertuples()):
+
+        # Go through each ndarr row (each with dim num_robots)
+        conv_acc_raw_data_df = pd.DataFrame(
+            {
+                "trial_ind": np.repeat(range(row.num_trials), row.num_robots),
+                "conv_step_ind" : np.asarray(row.conv_step_ind).flatten(),
+                "accuracies": np.asarray(row.accuracies).flatten()
+            }
+        )
+
+        # current_conv_ind_df = pd.DataFrame({"conv_step_ind": np.mean(row.conv_step_ind, axis=1)})
+        # current_acc_df = pd.DataFrame({"accuracies": np.mean(row.accuracies, axis=1)})
+
+        # Repeat the current parameters
+        current_params_df = params_only_dfs.loc[[ind]]
+        repeated_current_params_df = current_params_df.loc[
+            current_params_df.index.repeat(row.num_robots * row.num_trials)
+        ].reset_index(drop=True)
+
+        # Combine parameter rows with data rows
+        dfs[ind] = pd.concat([repeated_current_params_df, conv_acc_raw_data_df], axis=1)
+
+    # Combine all into a single DataFrame
+    final_df = pd.concat(dfs, axis=0, ignore_index=True)
+
+    # Save a CSV copy of the new DataFrame
+    if csv_filename: final_df.to_csv(csv_filename, index=False)
+
+    return final_df
+
+################################################################################
+################################################################################
+
+
+
+################################################################################
+# Expand the numpy arrays in the score columns into multiple rows
 ################################################################################
 
 def expand_indi_scores(target_df, csv_filename=None):
-    """Expand the individual accuracy and convergence scores into respective single-element rows and add accuracy difference column
+    """Expand the individual accuracy and convergence scores into respective single-element rows
     """
 
     dfs = [
@@ -688,11 +919,11 @@ def expand_indi_scores(target_df, csv_filename=None):
 
 
 ################################################################################
-# Expand the lists in the aggregate score column into multiple rows
+# Expand the numpy arrays in the aggregate score column into multiple rows
 ################################################################################
 
 def expand_agg_scores(target_df, csv_filename=None):
-    """Expand the `agg_scores` column into single-element rows and add accuracy difference column
+    """Expand the `agg_scores` column into single-element rows
     """
 
     dfs = [
@@ -781,7 +1012,7 @@ def compute_flawed_percentage(target_df, csv_filename=None):
 
 
 ################################################################################
-# Create a boxplot figure
+# Create a boxplot with dual x axes figure
 ################################################################################
 
 # # Workaround to enable LaTeX in Plotly figures using VSCode
@@ -813,14 +1044,14 @@ COLOR_BLIND_FRIENDLY_COLORS_DICT_RGBA = {
     "pink": "rgba(204, 121, 167, 255)"
 }
 
-def plot_boxplot_plotly(
+def plot_multix_boxplot_plotly(
     target_df,
     y_key: str,
     x1_key: str,
     color_key: str,
     **kwargs
 ):
-    """
+    """Plot a boxplot using Plotly with a primary and secondary x-axes.
 
     Args:
         target_df: Pandas DataFrame containing the data to plot.
@@ -1017,6 +1248,122 @@ def plot_boxplot_plotly(
 
 
 ################################################################################
+# Create a boxplot figure
+################################################################################
+
+def plot_boxplot_plotly(
+    target_df,
+    y_key: str,
+    x_key: str,
+    **kwargs
+):
+    # Create copy of data
+    df = pd.DataFrame(target_df, copy=True)
+
+    fig = go.Figure()
+
+    # Check for category orders if we need to order the color_key
+    if "category_orders" in kwargs:
+        for k, v in kwargs["category_orders"].items():
+            df[k] = pd.Categorical(
+                df[k], categories=v, ordered=True
+            )
+
+        # Sort the columns
+        df.sort_values(by=list(kwargs["category_orders"].keys()), inplace=True)
+
+    # Plot boxplot
+    box_trace = go.Box(
+        y=df[y_key].values,
+        x=df[x_key].values,
+        # name=trace_val,
+        marker_color=None if "color" not in kwargs else kwargs["color"],
+        whiskerwidth=0.8,
+        marker={
+            "size": 15 if "marker_size" not in kwargs else kwargs["marker_size"]
+        },
+        line={"width": 3}
+    )
+
+    fig.add_trace(box_trace)
+
+    # Modify IQR method
+    fig.update_traces(quartilemethod="inclusive" if "quartilemethod" not in kwargs else kwargs["quartilemethod"])  # Or "inclusive"
+
+    # Update layout for better visibility
+    fig.update_layout(
+        boxmode="group",
+        boxgroupgap=0.1 if "boxgroupgap" not in kwargs else kwargs["boxgroupgap"],
+        margin=dict(l=3, r=3, t=3 if ("show_title" in kwargs and kwargs["show_title"] == False) or "title" not in kwargs else 40, b=3),  # Adjust margins for better spacing
+        yaxis=go.layout.YAxis(
+            title=None if "y_title" not in kwargs or ("show_y" in kwargs and not kwargs["show_y"]) else kwargs["y_title"] ,
+            mirror="ticks",
+            showline=True,
+            linewidth=1,
+            linecolor="black",
+            ticks="outside",
+            dtick=25 if "y_dtick" not in kwargs else kwargs["y_dtick"],
+            tickprefix=None if "y_label_prefix" not in kwargs else kwargs["y_label_prefix"],
+            ticksuffix=None if "y_label_suffix" not in kwargs else kwargs["y_label_suffix"],
+            tickfont={"size": 25 if "y_tick_font_size" not in kwargs else kwargs["y_tick_font_size"]},
+            range=None if "y_lim" not in kwargs else kwargs["y_lim"],
+            minor={"showgrid": False},
+            showticklabels=True if "show_y" not in kwargs else kwargs["show_y"],
+            gridcolor="#bbbbbb",
+            gridwidth=1,
+            zerolinecolor="#bbbbbb",
+            zerolinewidth=1,
+            side="left" if "y_side" not in kwargs else kwargs["y_side"]
+        ),
+        xaxis=go.layout.XAxis(
+            mirror=True,
+            showline=True,
+            linewidth=1,
+            linecolor="black",
+            # tickvals=[
+            #     df.loc[df[x_key] == val, "x1 offset"].iat[0]
+            #     for val in x1_values
+            # ],
+            # ticktext=x_labels,
+            ticks="outside",
+            tickprefix=None if "x_label_prefix" not in kwargs else kwargs["x_label_prefix"],
+            ticksuffix=None if "x_label_suffix" not in kwargs else kwargs["x_label_suffix"],
+            tickfont={"size": 25 if "x_tick_font_size" not in kwargs else kwargs["x_tick_font_size"]},
+            ticklen=6,
+            title=None if "x_title" not in kwargs or ("show_x" in kwargs and not kwargs["show_x"]) else kwargs["x_title"],
+            showticklabels=True if "show_x" not in kwargs else kwargs["show_x"],
+            side="bottom" if "x_side" not in kwargs else kwargs["x_side"]
+        ), # Explicit tick values and labels
+        legend=go.layout.Legend(
+            title=None if "legend_title" not in kwargs else kwargs["legend_title"],
+            font={"size": 15},
+            orientation="h",
+            xref="container",
+            yref="container",
+            x=None if "legend_x" not in kwargs else kwargs["legend_x"],
+            y=None if "legend_y" not in kwargs else kwargs["legend_y"]
+        ),
+        showlegend=True if "show_legend" not in kwargs else kwargs["show_legend"]
+    )
+
+    fig.show()
+
+    if "output_path" in kwargs and kwargs["output_path"] is not None:
+        fig.write_image(
+            kwargs["output_path"],
+            width=1300 if "fig_width" not in kwargs else kwargs["fig_width"],
+            height=650 if "fig_height" not in kwargs else kwargs["fig_height"],
+            scale=2.0 if "fig_scale" not in kwargs else kwargs["fig_scale"]
+        )
+
+    return fig
+
+################################################################################
+################################################################################
+
+
+
+################################################################################
 # Create a scatter plot
 ################################################################################
 
@@ -1052,7 +1399,7 @@ def plot_scatter_plotly(
         category_orders=None if "category_orders" not in kwargs else kwargs["category_orders"],
         width=650*1.05 if "show_legend" not in kwargs or not kwargs["show_legend"] else 650,
         height=650*1.05 if "show_legend" not in kwargs or not kwargs["show_legend"] else 650,
-        color_discrete_sequence=px.colors.diverging.Portland,
+        color_discrete_sequence=px.colors.diverging.Portland if "color_discrete_sequence" not in kwargs else kwargs["color_discrete_sequence"],
     )
 
     fig.update_traces(
@@ -1072,17 +1419,17 @@ def plot_scatter_plotly(
         margin=dict(l=3, r=3, t=3 if ("show_title" in kwargs and kwargs["show_title"] == False) or "title" not in kwargs else 40, b=3),  # Adjust margins for better spacing
         yaxis=go.layout.YAxis(
             title=None if "y_title" not in kwargs or ("show_y" in kwargs and not kwargs["show_y"]) else kwargs["y_title"] ,
-            titlefont={"size": 25},
             mirror="ticks",
             showline=True,
             linewidth=1,
             linecolor="black",
             ticks="outside",
-            tickprefix="",
-            ticksuffix=" ",
+            dtick=25 if "y_dtick" not in kwargs else kwargs["y_dtick"],
+            tickprefix=None if "y_label_prefix" not in kwargs else kwargs["y_label_prefix"],
+            ticksuffix=None if "y_label_suffix" not in kwargs else kwargs["y_label_suffix"],
             tickfont={"size": 26 if "main_tick_font_size" not in kwargs else kwargs["main_tick_font_size"]},
             range=None if "y_lim" not in kwargs else kwargs["y_lim"],
-            minor={"showgrid": True},
+            minor={"showgrid": False},
             showticklabels=True if "show_y" not in kwargs else kwargs["show_y"],
             gridcolor="#bbbbbb",
             gridwidth=1,
@@ -1098,12 +1445,12 @@ def plot_scatter_plotly(
             linewidth=1,
             linecolor="black",
             ticks="outside",
-            tickfont={"size": 25},
+            dtick=25 if "x_dtick" not in kwargs else kwargs["x_dtick"],
+            tickfont={"size": 26 if "main_tick_font_size" not in kwargs else kwargs["main_tick_font_size"]},
             ticklen=6,
             title="" if "x_title" not in kwargs or ("show_x" in kwargs and not kwargs["show_x"]) else kwargs["x_title"],
-            titlefont={"size": 26},
             range=None if "x_lim" not in kwargs else kwargs["x_lim"],
-            minor={"showgrid": True},
+            minor={"showgrid": False},
             showticklabels=True if "show_x" not in kwargs else kwargs["show_x"],
             gridcolor="#bbbbbb",
             gridwidth=1,
@@ -1114,13 +1461,17 @@ def plot_scatter_plotly(
         ), # Explicit tick values and labels
         legend=go.layout.Legend(
             title="" if "legend_title" not in kwargs else kwargs["legend_title"],
-            font={"size": 18},
-            orientation="h",
+            font={"size": 18 if "legend_font_size" not in kwargs else kwargs["legend_font_size"]},
+            orientation="v" if "legend_orientation" not in kwargs else kwargs["legend_orientation"],
             xref="container",
             yref="container",
             x=None if "legend_x" not in kwargs else kwargs["legend_x"],
             y=None if "legend_y" not in kwargs else kwargs["legend_y"],
-            itemsizing="constant",
+            itemsizing="trace",
+            tracegroupgap=10 if "legend_trace_group_gap" not in kwargs else kwargs["legend_trace_group_gap"],
+            valign="middle",
+            bordercolor="black",
+            borderwidth=1,
         ),
         showlegend=True if "show_legend" not in kwargs else kwargs["show_legend"],
         coloraxis_showscale=True if "show_legend" not in kwargs else kwargs["show_legend"]

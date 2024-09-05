@@ -23,7 +23,7 @@
           or set to zero, this value is taken from the clock and a warning
           message is displayed.
     -->
-        <experiment length="400" ticks_per_second="10" random_seed="0" />
+        <experiment length="400" ticks_per_second="10" random_seed="1240" />
     </framework>
 
     <!-- *************** -->
@@ -89,7 +89,7 @@
             <num_trials value="3" />
             <arena_tiles tile_count_x="500" tile_count_y="500" /> <!-- number of tiles for the arena -->
             <target_fill_ratio value="0.75" /> <!-- range of target fill ratios -->
-            <flawed_robots num="2" acc_b="0.75" acc_w="0.75" activate_filter_for_all="false" />
+            <flawed_robots num="0" acc_b="0.75" acc_w="0.75" activate_filter_for_all="false" />
             <path folder="data/temp" /> <!-- path to the output data and datetime in filename -->
             <verbosity level="full" /> <!-- "full", "none" -->
         </static_degradation>
@@ -113,32 +113,36 @@
  
       $ argos3 -q box
   -->
-    <arena size="5, 5, 1" center="0,0,0.5">
+    <arena size="3.0353, 3.0226, 1" center="0,0,0.5">
 
-        <floor id="floor" source="loop_functions" pixels_per_meter="200" />
-        <!-- <floor id="floor" source="image" path="img/white.png" /> -->
+        <!-- <floor id="floor" source="loop_functions" pixels_per_meter="200" /> -->
+        <floor id="floor" source="image" path="argos/floor_qr_code_pattern_black_white.png" />
 
         <!-- Place four boxes in a square to delimit the arena -->
         <!-- <box id="wall_north" size="5.25,0.1,0.5" movable="false"> -->
         <box id="wall_north" size="10,0.1,0.5" movable="false">
+            <body position="0,1.65,0" orientation="0,0,0" />
             <!-- <body position="0,2.8243291083242075,0" orientation="0,0,0" /> -->
             <!-- <body position="0,2.011746925739275,0" orientation="0,0,0" /> -->
             <!-- <body position="0,1.290717695633861,0" orientation="0,0,0" /> -->
-            <body position="0,0.9273198961208501,0" orientation="0,0,0" />
+            <!-- <body position="0,0.9273198961208501,0" orientation="0,0,0" /> -->
         </box>
         <box id="wall_south" size="10,0.1,0.5" movable="false">
+            <body position="0,-1.65,0" orientation="0,0,0" />
             <!-- <body position="0,-2.8243291083242075,0" orientation="0,0,0" /> -->
             <!-- <body position="0,-2.011746925739275,0" orientation="0,0,0" /> -->
             <!-- <body position="0,-1.290717695633861,0" orientation="0,0,0" /> -->
             <body position="0,-0.9273198961208501,0" orientation="0,0,0" />
         </box>
         <box id="wall_east" size="0.1,10,0.5" movable="false">
+            <body position="1.65,0,0" orientation="0,0,0" />
             <!-- <body position="2.8243291083242075,0,0" orientation="0,0,0" /> -->
             <!-- <body position="2.011746925739275,0,0" orientation="0,0,0" /> -->
             <!-- <body position="1.290717695633861,0,0" orientation="0,0,0" /> -->
             <body position="0.9273198961208501,0,0" orientation="0,0,0" />
         </box>
         <box id="wall_west" size="0.1,10,0.5" movable="false">
+            <body position="-1.65,0,0" orientation="0,0,0" />
             <!-- <body position="-2.8243291083242075,0,0" orientation="0,0,0" /> -->
             <!-- <body position="-2.011746925739275,0,0" orientation="0,0,0" /> -->
             <!-- <body position="-1.290717695633861,0,0" orientation="0,0,0" /> -->
@@ -150,7 +154,7 @@
             <position method="uniform" min="-0.9273198961208501,-0.9273198961208501,0"
                 max="0.9273198961208501,0.9273198961208501,0" />
             <orientation method="uniform" min="0,0,0" max="360,0,0" />
-            <entity quantity="5" max_trials="100" base_num="0">
+            <entity quantity="1" max_trials="100" base_num="0">
                 <kheperaiv id="kiv" rab_data_size="50" rab_range="0.7">
                     <controller config="ksdc" />
                 </kheperaiv>
@@ -227,13 +231,13 @@
       $ argos3 -q visualizations
   -->
     <visualization>
-        <!-- <qt-opengl>
+        <qt-opengl>
             <camera>
                 <placements>
                     <placement index="0" position="0,0,8.14689" look_at="0,0,0" up="1,0,0" lens_focal_length="35" />
                 </placements>
             </camera>
-        </qt-opengl> -->
+        </qt-opengl>
     </visualization>
 
 </argos-configuration>
