@@ -229,7 +229,7 @@ sed -i "s/<entity.*/<entity quantity=\"${NUM_ROBOTS}\" max_trials=\"100\" base_n
 
                     # Transfer data into target data directory (including parameter files)
                     # (this is to prevent overflowing the /local disk space)
-                    mv data/${JSON_FOLDER} ${PARAM_FILE} $DATADIR/data
+                    mv data/${JSON_FOLDER} *.argos ${DATADIR}/data
                 fi
             done
         done

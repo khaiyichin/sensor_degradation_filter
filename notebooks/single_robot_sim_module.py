@@ -256,12 +256,12 @@ class SensorFilter1DAlpha:
         num = (obs.n / obs.t + soc_est - 1.0)
         denom = (2*soc_est - 1)
 
-        if num >= denom: return 9.99999e-1
-        elif num <= 0.0: return 1e-6
-        else:
-            updated_mean_result = num / denom
+        updated_estimate = num / denom
 
-        return updated_mean_result
+        if updated_estimate >= 1.0: return 9.99999e-1
+        elif updated_estimate <= 0.0: return 1e-6
+        else:
+            return updated_estimate
 
     def estimate(self, est: Estimate, obs: Observation, soc_est):
 
@@ -534,19 +534,21 @@ class MinimalisticCollectivePerception:
             alpha: Local confidence.
         """
 
-        q = (sensor_b + sensor_w - 1.0) ** 2 # common term
+        q_sqrt = sensor_b + sensor_w - 1.0 # common term
 
         if obs.n < 0 or obs.n > obs.t: raise RuntimeError("Observed values are erroneous")
 
-        if obs.n <= (1-sensor_w) * obs.t:
+        regular_estimate = (obs.n / obs.t + sensor_w - 1.0) / q_sqrt
+
+        if regular_estimate <= 0.0:
             x_hat = 0.0
-            alpha = q * (obs.t * sensor_w**2 - (2 * sensor_w - 1.0) * obs.complement) / (sensor_w**2 * (sensor_w - 1.0)**2)
-        elif obs.n >= sensor_b * obs.t:
+            alpha = q_sqrt**2 * (obs.t * sensor_w**2 - (2 * sensor_w - 1.0) * obs.complement) / (sensor_w**2 * (sensor_w - 1.0)**2)
+        elif regular_estimate >= 1.0:
             x_hat = 1.0
-            alpha = q * (obs.t * sensor_b**2 - 2 * obs.n * sensor_b + obs.n) / (sensor_b ** 2 * (sensor_b - 1.0)**2)
+            alpha = q_sqrt**2 * (obs.t * sensor_b**2 - 2 * obs.n * sensor_b + obs.n) / (sensor_b ** 2 * (sensor_b - 1.0)**2)
         else:
-            x_hat = (obs.n / obs.t + sensor_w - 1.0) / np.sqrt(q)
-            alpha = q * obs.t**3 / (obs.n * obs.complement)
+            x_hat = regular_estimate
+            alpha = q_sqrt**2 * obs.t**3 / (obs.n * obs.complement)
 
         # Prevent numerical errors
         if alpha == 0: alpha = 1e-6
