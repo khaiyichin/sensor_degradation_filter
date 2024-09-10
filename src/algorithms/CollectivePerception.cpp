@@ -5,6 +5,8 @@ void CollectivePerception::ComputeLocalEstimate(const double &sensor_acc_b, cons
     double h = static_cast<double>(params_ptr_->NumBlackTilesSeen);
     double t = static_cast<double>(params_ptr_->NumObservations);
 
+    double regular_estimate = (h / t + sensor_acc_w - 1.0) / (sensor_acc_b + sensor_acc_w - 1);
+
     if ((sensor_acc_b == 1.0) && (sensor_acc_w == 1.0)) // perfect sensor
     {
         local_vals_.X = h / t;
@@ -12,7 +14,7 @@ void CollectivePerception::ComputeLocalEstimate(const double &sensor_acc_b, cons
     }
     else // imperfect sensor
     {
-        if (h <= (1.0 - sensor_acc_w) * t)
+        if (regular_estimate <= 0.0)
         {
             double num = std::pow(sensor_acc_b + sensor_acc_w - 1.0, 2) * (t * std::pow(sensor_acc_w, 2) - 2 * (t - h) * sensor_acc_w + (t - h));
             double denom = std::pow(sensor_acc_w, 2) * std::pow(sensor_acc_w - 1.0, 2);
@@ -20,7 +22,7 @@ void CollectivePerception::ComputeLocalEstimate(const double &sensor_acc_b, cons
             local_vals_.X = 0.0;
             local_vals_.Confidence = num / denom;
         }
-        else if (h >= sensor_acc_b * t)
+        else if (regular_estimate >= 1.0)
         {
             double num = std::pow(sensor_acc_b + sensor_acc_w - 1.0, 2) * (t * std::pow(sensor_acc_b, 2) - 2 * h * sensor_acc_b + h);
             double denom = std::pow(sensor_acc_b, 2) * std::pow(sensor_acc_b - 1.0, 2);
@@ -30,7 +32,7 @@ void CollectivePerception::ComputeLocalEstimate(const double &sensor_acc_b, cons
         }
         else
         {
-            local_vals_.X = (h / t + sensor_acc_w - 1.0) / (sensor_acc_b + sensor_acc_w - 1);
+            local_vals_.X = regular_estimate;
             local_vals_.Confidence = (std::pow(t, 3) * std::pow(sensor_acc_b + sensor_acc_w - 1.0, 2)) / (h * (t - h));
         }
     }
