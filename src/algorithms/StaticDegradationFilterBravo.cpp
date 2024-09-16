@@ -7,10 +7,9 @@ StaticDegradationFilterBravo::StaticDegradationFilterBravo(const std::shared_ptr
 
 void StaticDegradationFilterBravo::Init()
 {
-    type_2_err_prob_ = std::stod(params_ptr_->FilterSpecificParams["type_2_err_prob"].c_str());
+    type_1_err_prob_ = std::stod(params_ptr_->FilterSpecificParams["type_1_err_prob"].c_str());
 }
 
-#include <iostream>
 bool StaticDegradationFilterBravo::CompareWithNeighborEstimates()
 {
     std::vector<CollectivePerception::EstConfPair> neighbor_estconf_vec = collective_perception_algo_ptr_->GetParamsPtr()->MostRecentNeighborEstimates;
@@ -39,11 +38,11 @@ bool StaticDegradationFilterBravo::CompareWithNeighborEstimates()
 
     // Compute T-score
     double t_score = gsl_cdf_tdist_Qinv(
-        (1.0 - type_2_err_prob_) / 2.0,
+        type_1_err_prob_ / 2.0,
         num_neighbors);
 
     // Compute one-sided interval
-    double one_sided_interval = sample_std_dev * (t_score / std::sqrt(num_neighbors) + 1.0);
+    double one_sided_interval = sample_std_dev * t_score / std::sqrt(num_neighbors);
 
     // Check to see if the absolute difference is within bounds
     if (std::abs(sample_mean - collective_perception_algo_ptr_->GetLocalVals().X) < one_sided_interval)

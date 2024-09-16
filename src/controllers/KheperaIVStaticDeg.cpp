@@ -132,9 +132,9 @@ void KheperaIVStaticDeg::Init(TConfigurationNode &xml_node)
         sensor_degradation_filter_ptr_ =
             std::make_shared<StaticDegradationFilterBravo>(collective_perception_algo_ptr_);
         sensor_degradation_filter_ptr_->GetParamsPtr()->Method = "BRAVO";
-        std::string type_2_err_prob_str;
-        GetNodeAttribute(GetNode(static_degradation_filter_node, "params"), "type_2_err_prob", type_2_err_prob_str);
-        sensor_degradation_filter_ptr_->GetParamsPtr()->FilterSpecificParams = {{"type_2_err_prob", type_2_err_prob_str}};
+        std::string type_1_err_prob_str;
+        GetNodeAttribute(GetNode(static_degradation_filter_node, "params"), "type_1_err_prob", type_1_err_prob_str);
+        sensor_degradation_filter_ptr_->GetParamsPtr()->FilterSpecificParams = {{"type_1_err_prob", type_1_err_prob_str}};
     }
     else
     {

@@ -2,7 +2,7 @@
 
 # This scripts extracts the convergence and accuracy data from the JSON files into a single Pandas DataFrame (per job).
 # The DataFrame contains the convergence and accuracy data from experiments of a particular filter period and
-# communication period. This means that for each flawed_acc-correct_acc-TFR-flawed_robot(-type_2_err_prob) combination,
+# communication period. This means that for each flawed_acc-correct_acc-TFR-flawed_robot(-type_1_err_prob) combination,
 # all trials from that combination is stored as a single row in the DataFrame.
 
 JOB_TYPE=conv_acc_data_bravo_corfilt1

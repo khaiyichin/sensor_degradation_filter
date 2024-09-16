@@ -16,8 +16,8 @@ METHOD="BRAVO"
 CORRECT_FILTER=False
 COMMS_PERIOD=(1 10 100)
 FILTER_PERIOD=(1000 2000 4000)
-TYPE2_ERR_PROB=(050 100 150 200 250)
-TYPE2_ERR_PROB_DEC=(0.05 0.1 0.15 0.2 0.25)
+TYPE_1_ERR_PROB=(050 100 150 200 250)
+TYPE_1_ERR_PROB_DEC=(0.05 0.1 0.15 0.2 0.25)
 
 module load slurm
 
@@ -36,22 +36,22 @@ for (( i = 0; i < ${#COMMS_PERIOD[@]}; i++ ))
 do
     for (( j = 0; j < ${#FILTER_PERIOD[@]}; j++ ))
     do
-        for (( k = 0; k < ${#TYPE2_ERR_PROB[@]}; k++ ))
+        for (( k = 0; k < ${#TYPE_1_ERR_PROB[@]}; k++ ))
         do
             # Modify the parameters
             sed -i "s/commsPeriod:.*/commsPeriod: ${COMMS_PERIOD[i]}/" ${TARGET_PARAM_FILE}
             sed -i "s/sensorFilterPeriod:.*/sensorFilterPeriod: ${FILTER_PERIOD[j]}/" ${TARGET_PARAM_FILE}
-            sed -i "s/  type2ErrProb:.*/  type2ErrProb: ${TYPE2_ERR_PROB_DEC[k]}/" ${TARGET_PARAM_FILE}
+            sed -i "s/  type1ErrProb:.*/  type1ErrProb: ${TYPE_1_ERR_PROB_DEC[k]}/" ${TARGET_PARAM_FILE}
 
             # Copy param file
-            TARGET_DIR=${TOP_DIR}/filtp${FILTER_PERIOD[j]}/commsp${COMMS_PERIOD[i]}/type2err${TYPE2_ERR_PROB[k]}
+            TARGET_DIR=${TOP_DIR}/filtp${FILTER_PERIOD[j]}/commsp${COMMS_PERIOD[i]}/type1err${TYPE_1_ERR_PROB[k]}
             mkdir -p ${TARGET_DIR}
 	        cp ${TARGET_PARAM_FILE} ${TARGET_DIR}
 	        cp sbatch_static_topo_static_deg_run.sh ${TARGET_DIR}
             pushd ${TARGET_DIR}
             mkdir -p data
 
-            JOB_NAME=${METHOD}${CORRECT_FILTER}_filtp${FILTER_PERIOD[j]}_commsp${COMMS_PERIOD[i]}_type2err${TYPE2_ERR_PROB[k]}
+            JOB_NAME=${METHOD}${CORRECT_FILTER}_filtp${FILTER_PERIOD[j]}_commsp${COMMS_PERIOD[i]}_type1err${TYPE_1_ERR_PROB[k]}
 
             # Run the job
 	        sbatch -N 1 -n 8 --mem=8G -p short -o "log_%x_%j.out" -e "log_%x_%j.err" -J ${JOB_NAME} -t 08:00:00 --mail-user=kchin@wpi.edu --mail-type=fail,end sbatch_static_topo_static_deg_run.sh

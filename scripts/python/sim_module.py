@@ -87,7 +87,7 @@ class MultiRobotSimStaticDegradation:
         self.correct_robot_filter = param.correct_robot_filter
 
         if self.method == "BRAVO":
-            self.filter_specific_params_lst = [float(param.filter_specific_params["type_2_err_prob"])]
+            self.filter_specific_params_lst = [float(param.filter_specific_params["type_1_err_prob"])]
         else:
             self.filter_specific_params_lst = [-1.0]
 

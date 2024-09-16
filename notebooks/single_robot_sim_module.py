@@ -670,7 +670,7 @@ class RobotStaticDegradation(Robot):
         if filter_type == "ALPHA":
             self.sensor_filter = SensorFilter1DAlpha()
         elif filter_type == "BRAVO":
-            self.type_2_err_prob = filter_params[0]
+            self.type_1_err_prob = filter_params[0]
             self.sensor_filter = SensorFilter1DAlpha()
 
     def evolve_sensor_degradation(self):
@@ -717,8 +717,10 @@ class RobotStaticDegradation(Robot):
 
         if self.num_neighbors <= 1: return False
 
-        score = stats.t.isf((1-self.type_2_err_prob) / 2, df=self.num_neighbors)
+        # Compute t-score
+        score = stats.t.isf(self.type_1_err_prob / 2, df=self.num_neighbors)
 
-        lower_bound = self.x_hat - self.x_sample_std * (score / np.sqrt(self.num_neighbors) + 1.0)
-        upper_bound = self.x_hat + self.x_sample_std * (score / np.sqrt(self.num_neighbors) + 1.0)
-        return False if (self.x_sample_mean > lower_bound and self.x_sample_mean < upper_bound) else True
+        # Compute one-sided interval
+        one_sided_interval = self.x_sample_std * score / np.sqrt(self.num_neighbors)
+
+        return False if abs(self.x_sample_mean - self.x_hat) < one_sided_interval else True

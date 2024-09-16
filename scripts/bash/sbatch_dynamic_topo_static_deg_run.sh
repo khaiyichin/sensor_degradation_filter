@@ -68,7 +68,7 @@ DENSITY=10
 WALL_POSITION=2.824329 # related to density
 FILTER_PERIOD=1000
 METHOD=ALPHA
-TYPE_2_ERR_PROB=0.05 # only applicable for BRAVO filter
+TYPE_1_ERR_PROB=0.05 # only applicable for BRAVO filter
 
 # Parameters related to this job
 # (Fixed)
@@ -136,7 +136,7 @@ sed -i "s/max_speed=.*/max_speed=\"${SPEED}\" \/>/" ${ARGOSFILE}
 sed -i "s/<static_degradation_filter.*/<static_degradation_filter sim=\"true\" method=\"${METHOD}\" period_ticks=\"${FILTER_PERIOD}\" >/" ${ARGOSFILE}
 if [[ ${METHOD} == "BRAVO" ]]
 then
-    sed -i "s/<params type_2_err_prob=.*/<params type_2_err_prob=\"${TYPE_2_ERR_PROB}\" \/>/" ${ARGOSFILE}
+    sed -i "s/<params type_1_err_prob=.*/<params type_1_err_prob=\"${TYPE_1_ERR_PROB}\" \/>/" ${ARGOSFILE}
 fi
 
 # Configure number of trials

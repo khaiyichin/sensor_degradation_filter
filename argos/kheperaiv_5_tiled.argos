@@ -23,7 +23,7 @@
           or set to zero, this value is taken from the clock and a warning
           message is displayed.
     -->
-        <experiment length="400" ticks_per_second="10" random_seed="1240" />
+        <experiment length="1000" ticks_per_second="10" random_seed="385293" />
     </framework>
 
     <!-- *************** -->
@@ -70,7 +70,7 @@
                     no_turn_angle_threshold="10"
                     max_speed="10" /> <!-- speed in cm/s -->
                 <static_degradation_filter sim="true" method="BRAVO" period_ticks="100">
-                    <params type_2_err_prob="0.05" /> <!-- BRAVO filter specific parameters -->
+                    <params type_1_err_prob="0.05" /> <!-- BRAVO filter specific parameters -->
                 </static_degradation_filter>
                 <!-- <static_degradation sim="false" assumed_sensor_acc_b="0.75"
                 assumed_sensor_acc_w="0.75" /> -->
@@ -87,8 +87,8 @@
         label="static_deg_loop_functions">
         <static_degradation>
             <num_trials value="3" />
-            <arena_tiles tile_count_x="500" tile_count_y="500" /> <!-- number of tiles for the arena -->
-            <target_fill_ratio value="0.75" /> <!-- range of target fill ratios -->
+            <arena_tiles tile_count_x="1" tile_count_y="1" /> <!-- number of tiles for the arena -->
+            <target_fill_ratio value="-1" /> <!-- range of target fill ratios -->
             <flawed_robots num="0" acc_b="0.75" acc_w="0.75" activate_filter_for_all="false" />
             <path folder="data/temp" /> <!-- path to the output data and datetime in filename -->
             <verbosity level="full" /> <!-- "full", "none" -->
@@ -121,40 +121,39 @@
         <!-- Place four boxes in a square to delimit the arena -->
         <!-- <box id="wall_north" size="5.25,0.1,0.5" movable="false"> -->
         <box id="wall_north" size="10,0.1,0.5" movable="false">
-            <body position="0,1.65,0" orientation="0,0,0" />
+            <body position="0,1.55,0" orientation="0,0,0" />
             <!-- <body position="0,2.8243291083242075,0" orientation="0,0,0" /> -->
             <!-- <body position="0,2.011746925739275,0" orientation="0,0,0" /> -->
             <!-- <body position="0,1.290717695633861,0" orientation="0,0,0" /> -->
             <!-- <body position="0,0.9273198961208501,0" orientation="0,0,0" /> -->
         </box>
         <box id="wall_south" size="10,0.1,0.5" movable="false">
-            <body position="0,-1.65,0" orientation="0,0,0" />
+            <body position="0,-1.55,0" orientation="0,0,0" />
             <!-- <body position="0,-2.8243291083242075,0" orientation="0,0,0" /> -->
             <!-- <body position="0,-2.011746925739275,0" orientation="0,0,0" /> -->
             <!-- <body position="0,-1.290717695633861,0" orientation="0,0,0" /> -->
-            <body position="0,-0.9273198961208501,0" orientation="0,0,0" />
+            <!-- <body position="0,-0.9273198961208501,0" orientation="0,0,0" /> -->
         </box>
         <box id="wall_east" size="0.1,10,0.5" movable="false">
-            <body position="1.65,0,0" orientation="0,0,0" />
+            <body position="1.55,0,0" orientation="0,0,0" />
             <!-- <body position="2.8243291083242075,0,0" orientation="0,0,0" /> -->
             <!-- <body position="2.011746925739275,0,0" orientation="0,0,0" /> -->
             <!-- <body position="1.290717695633861,0,0" orientation="0,0,0" /> -->
-            <body position="0.9273198961208501,0,0" orientation="0,0,0" />
+            <!-- <body position="0.9273198961208501,0,0" orientation="0,0,0" /> -->
         </box>
         <box id="wall_west" size="0.1,10,0.5" movable="false">
-            <body position="-1.65,0,0" orientation="0,0,0" />
+            <body position="-1.55,0,0" orientation="0,0,0" />
             <!-- <body position="-2.8243291083242075,0,0" orientation="0,0,0" /> -->
             <!-- <body position="-2.011746925739275,0,0" orientation="0,0,0" /> -->
             <!-- <body position="-1.290717695633861,0,0" orientation="0,0,0" /> -->
-            <body position="-0.9273198961208501,0,0" orientation="0,0,0" />
+            <!-- <body position="-0.9273198961208501,0,0" orientation="0,0,0" /> -->
         </box>
 
         <!-- Place a foot-bot in the origin and bind it to the controller -->
         <distribute>
-            <position method="uniform" min="-0.9273198961208501,-0.9273198961208501,0"
-                max="0.9273198961208501,0.9273198961208501,0" />
+            <position method="uniform" min="-1.55,-1.55,0" max="1.55,1.55,0" />
             <orientation method="uniform" min="0,0,0" max="360,0,0" />
-            <entity quantity="1" max_trials="100" base_num="0">
+            <entity quantity="6" max_trials="100" base_num="0">
                 <kheperaiv id="kiv" rab_data_size="50" rab_range="0.7">
                     <controller config="ksdc" />
                 </kheperaiv>
@@ -231,13 +230,13 @@
       $ argos3 -q visualizations
   -->
     <visualization>
-        <qt-opengl>
+        <!-- <qt-opengl>
             <camera>
                 <placements>
                     <placement index="0" position="0,0,8.14689" look_at="0,0,0" up="1,0,0" lens_focal_length="35" />
                 </placements>
             </camera>
-        </qt-opengl>
+        </qt-opengl> -->
     </visualization>
 
 </argos-configuration>
