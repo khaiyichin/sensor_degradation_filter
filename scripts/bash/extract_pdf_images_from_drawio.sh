@@ -7,7 +7,7 @@ EPS=false
 usage() {
     echo "Usage: $0 [-e] <DRAWIO_FILE>"
     echo "Options:"
-    echo "  -e   Create an EPS copy for the SVG files (optional)"
+    echo "  -e   Create an EPS copy for the PDF files (optional)"
     exit 1
 }
 
@@ -49,28 +49,28 @@ do
 	then
 
 		# Define output filename
-		OUTNAME="${DIAGRAM_PAGES[p]}.svg"
+		OUTNAME="${DIAGRAM_PAGES[p]}.pdf"
 		echo "Exporting ${OUTNAME}..."
 
 		drawio --export \
-			--format svg \
-			--embed-svg-images \
+			--format pdf \
+			--crop \
 			--page-index ${p} \
 			--output ${OUTNAME} \
 			${DRAWIO_FILE}
 
 		echo "Done!"
-		echo "Adding white background to ${OUTNAME}..."
+		# echo "Adding white background to ${OUTNAME}..."
 
-		sed -i "s|<defs/>|<defs/><rect fill=\"#ffffff\" width=\"100%\" height=\"100%\" x=\"0\" y=\"0\"/>|g" ${OUTNAME}
+		# sed -i "s|<defs/>|<defs/><rect fill=\"#ffffff\" width=\"100%\" height=\"100%\" x=\"0\" y=\"0\"/>|g" ${OUTNAME}
 
-		echo "Done!"
+		# echo "Done!"
 
 		# Create an EPS copy
 		if ${EPS}
 		then
 			echo "Creating ${DIAGRAM_PAGES[p]}.eps..."
-			inkscape ${DIAGRAM_PAGES[p]}.svg -o ${DIAGRAM_PAGES[p]}.eps --export-ignore-filters --export-ps-level=3 --export-text-to-path
+			inkscape ${DIAGRAM_PAGES[p]}.pdf -o ${DIAGRAM_PAGES[p]}.eps --export-ignore-filters --export-ps-level=3 --export-text-to-path
 			echo "Done!"
 		fi
 
