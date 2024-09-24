@@ -1156,7 +1156,7 @@ def plot_multix_boxplot_plotly(
 
     # Update layout for better visibility
     fig.update_layout(
-        font_family="sans-serif",
+        font_family="Noto Sans",
         boxmode="group",
         boxgroupgap=0.1 if "boxgroupgap" not in kwargs else kwargs["boxgroupgap"],
         margin=dict(l=3, r=3, t=3 if ("show_title" in kwargs and kwargs["show_title"] == False) or "title" not in kwargs else 40, b=3),  # Adjust margins for better spacing
@@ -1293,7 +1293,7 @@ def plot_boxplot_plotly(
 
     # Update layout for better visibility
     fig.update_layout(
-        font_family="sans-serif",
+        font_family="Noto Sans",
         boxmode="group",
         boxgroupgap=0.1 if "boxgroupgap" not in kwargs else kwargs["boxgroupgap"],
         margin=dict(l=3, r=3, t=3 if ("show_title" in kwargs and kwargs["show_title"] == False) or "title" not in kwargs else 40, b=3),  # Adjust margins for better spacing
@@ -1416,7 +1416,7 @@ def plot_scatter_plotly(
 
     # Update layout for better visibility
     fig.update_layout(
-        font_family="sans-serif",
+        font_family="Noto Sans",
         title=None if "title" not in kwargs or ("show_title" in kwargs and not kwargs["show_title"]) else kwargs["title"],
         xaxis_title_standoff=10,  # Adjust space between axis title and axis labels
         margin=dict(l=3, r=3, t=3 if ("show_title" in kwargs and kwargs["show_title"] == False) or "title" not in kwargs else 40, b=3),  # Adjust margins for better spacing
