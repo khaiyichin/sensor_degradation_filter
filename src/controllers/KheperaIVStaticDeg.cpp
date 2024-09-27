@@ -312,7 +312,7 @@ UInt32 KheperaIVStaticDeg::ObserveTileColor()
 
     const CCI_KheperaIVGroundSensor::TReadings &ground_readings = ci_ground_ptr_->GetReadings();
 
-    // Use only the left sensor (index 3) to observe
+    // Use only the right sensor (index 3) to observe
     float prob;
     unsigned int encounter = static_cast<unsigned int>(std::round(ground_readings[3].Value));
 
