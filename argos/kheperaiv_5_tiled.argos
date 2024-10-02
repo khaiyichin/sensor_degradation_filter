@@ -62,7 +62,7 @@
             </sensors>
 
             <params>
-                <diffusion go_straight_angle_range="-5:5" delta="0.1" />
+                <diffusion go_straight_angle_range="-1:1" delta="0.005" />
                 <ground_sensor period_ticks="1" sensor_acc_b="0.95" sensor_acc_w="0.95" />
                 <comms period_ticks="10" />
                 <wheel_turning hard_turn_angle_threshold="90"
@@ -72,8 +72,6 @@
                 <static_degradation_filter sim="true" method="BRAVO" period_ticks="100">
                     <params type_2_err_prob="0.05" /> <!-- BRAVO filter specific parameters -->
                 </static_degradation_filter>
-                <!-- <static_degradation sim="false" assumed_sensor_acc_b="0.75"
-                assumed_sensor_acc_w="0.75" /> -->
             </params>
         </kheperaiv_static_deg_controller>
     </controllers>
@@ -151,10 +149,9 @@
 
         <!-- Place a foot-bot in the origin and bind it to the controller -->
         <distribute>
-            <position method="uniform" min="-0.9273198961208501,-0.9273198961208501,0"
-                max="0.9273198961208501,0.9273198961208501,0" />
+            <position method="uniform" min="-1.55,-1.55,0" max="1.55,1.55,0" />
             <orientation method="uniform" min="0,0,0" max="360,0,0" />
-            <entity quantity="1" max_trials="100" base_num="0">
+            <entity quantity="8" max_trials="100" base_num="0">
                 <kheperaiv id="kiv" rab_data_size="50" rab_range="0.7">
                     <controller config="ksdc" />
                 </kheperaiv>

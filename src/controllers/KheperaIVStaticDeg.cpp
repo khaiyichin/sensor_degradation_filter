@@ -145,21 +145,27 @@ void KheperaIVStaticDeg::Init(TConfigurationNode &xml_node)
 
     SensorDegradationFilter::Params &sensor_degradation_filter_params = *sensor_degradation_filter_ptr_->GetParamsPtr();
 
-    if (ground_sensor_params_.IsSimulated) // simulated experiments
-    {
-        // Set the assumed accuracies to be the same for now; they will be updated by the loop functions
-        sensor_degradation_filter_params.AssumedSensorAcc["b"] = ground_sensor_params_.ActualSensorAcc["b"];
-        sensor_degradation_filter_params.AssumedSensorAcc["w"] = ground_sensor_params_.ActualSensorAcc["w"];
-        sensor_degradation_filter_params.RunDegradationFilter = false; // will be activated from the loop functions if required
-        SetLEDs(CColor::BLUE);                                         // set to blue initially
-    }
-    else // physical experiments
-    {
-        GetNodeAttribute(static_degradation_filter_node, "assumed_sensor_acc_b", sensor_degradation_filter_params.AssumedSensorAcc["b"]);
-        GetNodeAttribute(static_degradation_filter_node, "assumed_sensor_acc_w", sensor_degradation_filter_params.AssumedSensorAcc["w"]);
-        sensor_degradation_filter_params.RunDegradationFilter = false; // will be activated from the loop functions if required
-        SetLEDs(CColor::BLUE);                                         // set to blue initially
-    }
+    // Set the assumed accuracies to be the same for now; they will be updated by the loop functions if needed
+    /*
+        In the simulated case, the proper assumed accuracy for the robot is set by the loop functions;
+        here we just initialized it to be the same as the actual accuracy but expect it to be changed before
+        the experiment starts.
+
+        In the non-simulated case, i.e., tracked ground sensor, the actual accuracy ground truth is not known and not
+        required anyway, so the values obtained from the XML file for `sensor_acc_*` is used to parametrize our
+        assumed accuracies. This works out because we don't simulate the tile color measurements in physical
+        experiments but instead use the actual readings from the ground sensor. In other words, the values from
+        `sensor_acc_*` from the XML file is our 'flawed' assumption of what the actual accuracy is.
+
+        NOTE: in the non-simulated case, there should be no flawed robots, so the `num` attribute in the `flawed_robots`
+        node (within the `static_degradation` loop functions node) should be 0. Consequently, the `acc_b` and `acc_w`
+        attributes do not apply (though you should set it to be equal to the `sensor_acc_*` values in the controller
+        node to facilitate data processing).
+    */
+    sensor_degradation_filter_params.AssumedSensorAcc["b"] = ground_sensor_params_.ActualSensorAcc["b"];
+    sensor_degradation_filter_params.AssumedSensorAcc["w"] = ground_sensor_params_.ActualSensorAcc["w"];
+    sensor_degradation_filter_params.RunDegradationFilter = false; // will be activated from the loop functions if required
+    SetLEDs(CColor::BLUE);                                         // set to blue initially
 
     GetNodeAttribute(static_degradation_filter_node, "period_ticks", sensor_degradation_filter_params.FilterActivationPeriodTicks);
 
@@ -321,7 +327,7 @@ UInt32 KheperaIVStaticDeg::ObserveTileColor()
     }
     else
     {
-        // Computed simulated encounter
+        // Compute simulated encounter
         float prob;
 
         if (encounter == 1) // white tile
