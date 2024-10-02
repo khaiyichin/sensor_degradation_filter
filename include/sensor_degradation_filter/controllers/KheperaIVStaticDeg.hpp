@@ -68,6 +68,7 @@ public:
 
     struct GroundSensorParams
     {
+        bool IsSimulated = true;
         UInt32 GroundMeasurementPeriodTicks;
         std::unordered_map<std::string, Real> ActualSensorAcc = {{"b", -1.0}, {"w", -1.0}};
     };

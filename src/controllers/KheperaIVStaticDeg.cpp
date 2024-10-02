@@ -141,12 +141,11 @@ void KheperaIVStaticDeg::Init(TConfigurationNode &xml_node)
         throw std::runtime_error("Unknown static degradation filter method, please double-check the XML file.");
     }
 
-    bool is_simulated;
-    GetNodeAttribute(static_degradation_filter_node, "sim", is_simulated);
+    GetNodeAttribute(static_degradation_filter_node, "sim", ground_sensor_params_.IsSimulated);
 
     SensorDegradationFilter::Params &sensor_degradation_filter_params = *sensor_degradation_filter_ptr_->GetParamsPtr();
 
-    if (is_simulated) // simulated experiments
+    if (ground_sensor_params_.IsSimulated) // simulated experiments
     {
         // Set the assumed accuracies to be the same for now; they will be updated by the loop functions
         sensor_degradation_filter_params.AssumedSensorAcc["b"] = ground_sensor_params_.ActualSensorAcc["b"];
@@ -158,8 +157,8 @@ void KheperaIVStaticDeg::Init(TConfigurationNode &xml_node)
     {
         GetNodeAttribute(static_degradation_filter_node, "assumed_sensor_acc_b", sensor_degradation_filter_params.AssumedSensorAcc["b"]);
         GetNodeAttribute(static_degradation_filter_node, "assumed_sensor_acc_w", sensor_degradation_filter_params.AssumedSensorAcc["w"]);
-        GetNodeAttribute(static_degradation_filter_node, "run_filter", sensor_degradation_filter_params.RunDegradationFilter);
-        THROW_ARGOSEXCEPTION("Not implemented yet.");
+        sensor_degradation_filter_params.RunDegradationFilter = false; // will be activated from the loop functions if required
+        SetLEDs(CColor::BLUE);                                         // set to blue initially
     }
 
     GetNodeAttribute(static_degradation_filter_node, "period_ticks", sensor_degradation_filter_params.FilterActivationPeriodTicks);
@@ -313,31 +312,40 @@ UInt32 KheperaIVStaticDeg::ObserveTileColor()
     const CCI_KheperaIVGroundSensor::TReadings &ground_readings = ci_ground_ptr_->GetReadings();
 
     // Use only the right sensor (index 3) to observe
-    float prob;
     unsigned int encounter = static_cast<unsigned int>(std::round(ground_readings[3].Value));
 
-    if (encounter == 1) // white tile
+    // Check if the ground sensor readings are actual or simulated
+    if (!ground_sensor_params_.IsSimulated)
     {
-        prob = ground_sensor_params_.ActualSensorAcc["w"];
-    }
-    else if (encounter == 0) // black tile
-    {
-        prob = ground_sensor_params_.ActualSensorAcc["b"];
+        return static_cast<UInt32>(encounter);
     }
     else
     {
-        THROW_ARGOSEXCEPTION("Invalid tile color observed.");
-    }
+        // Computed simulated encounter
+        float prob;
 
-    // Apply noise to observation
-    if (RNG_ptr_->Uniform(standard_uniform_support_) < prob) // correct observation
-    {
-        // Return correct observation
-        return static_cast<UInt32>(encounter);
-    }
-    else // incorrect observation
-    {
-        return static_cast<UInt32>(1 - encounter);
+        if (encounter == 1) // white tile
+        {
+            prob = ground_sensor_params_.ActualSensorAcc["w"];
+        }
+        else if (encounter == 0) // black tile
+        {
+            prob = ground_sensor_params_.ActualSensorAcc["b"];
+        }
+        else
+        {
+            THROW_ARGOSEXCEPTION("Invalid tile color observed.");
+        }
+
+        // Apply noise to observation
+        if (RNG_ptr_->Uniform(standard_uniform_support_) < prob) // correct observation
+        {
+            return static_cast<UInt32>(encounter);
+        }
+        else // incorrect observation
+        {
+            return static_cast<UInt32>(1 - encounter);
+        }
     }
 }
 
