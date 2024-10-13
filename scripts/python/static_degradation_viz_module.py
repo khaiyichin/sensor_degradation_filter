@@ -103,6 +103,8 @@ class StaticDegradationJsonData:
 
             for f in files:
 
+                if not f.endswith(".json"): continue # only parse JSON files
+
                 # Load the JSON file
                 with open(os.path.join(root, f), "r") as file:
                     if not self.silent: print("Loading", f)
@@ -1049,6 +1051,7 @@ def plot_multix_boxplot_plotly(
     y_key: str,
     x1_key: str,
     color_key: str,
+    strip_plot = False,
     **kwargs
 ):
     """Plot a boxplot using Plotly with a primary and secondary x-axes.
@@ -1130,12 +1133,18 @@ def plot_multix_boxplot_plotly(
             y=current_df[y_key].values,
             x=current_df["x_axis_locations"].values,
             name=trace_val,
-            marker_color=None if "box_colors" not in kwargs else kwargs["box_colors"][ind],
+            boxpoints=None if not strip_plot else "all",
+            jitter=None if not strip_plot else 0,
             whiskerwidth=0.8,
             marker={
+                "color": None if "box_colors" not in kwargs else kwargs["box_colors"][ind],
                 "size": 15 if "marker_size" not in kwargs else kwargs["marker_size"]
             },
-            line={"width": 3}
+            line={
+                "width": 3,
+                "color": None if not strip_plot else "rgba(0,0,0,0)"
+            },
+            fillcolor=None if not strip_plot else "rgba(0,0,0,0)"
         )
 
         fig.add_trace(box_trace)
@@ -1482,7 +1491,7 @@ def plot_scatter_plotly(
 
     fig.show()
 
-    if "output_path" in kwargs:
+    if "output_path" in kwargs and kwargs["output_path"] is not None:
         fig.write_image(
             kwargs["output_path"],
             width=650 if "fig_width" not in kwargs else kwargs["fig_width"],

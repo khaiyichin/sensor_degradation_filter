@@ -25,7 +25,7 @@ def load_data(args):
 
         if not files: return None # no files detected
         else:
-            json_files = [filename.endswith(".json") for filename in files]
+            json_files = [filename for filename in files if filename.endswith(".json")]
             if any(json_files):
                 if args.verbose:
                     print("Creating a StaticDegradationJsonData object for {0} JSON files in folder={1}...".format(len(json_files), root))
