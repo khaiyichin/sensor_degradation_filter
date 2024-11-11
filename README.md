@@ -1,6 +1,6 @@
 # Sensor Degradation Filters for Minimalistic Collective Perception
 ## Introduction
-This repository provides the code to simulate the experiments shown in [Adaptive Self-Calibration for Minimalistic Collective Perception by Imperfect Swarms](arxiv-link-here).
+This repository provides the code to simulate the experiments shown in [Adaptive Self-Calibration for Minimalistic Collective Perception by Imperfect Robot Swarms](https://arxiv.org/abs/2410.21546).
 
 Two simulators are provided here:
 1. Python-based static topology simulator, and
@@ -19,7 +19,7 @@ The robots in the dynamic topology simulator move around a square arena of black
 </p>
 
 ## Requirements
-- Python 3.8+, `pip`, and `python3-venv` - _the code here was tested on Python 3.8 (Ubuntu 20.04) and Python 3.12 (24.04)_
+- Python 3.8+, `pip`, and `python3-venv` - _the code here was tested on Python 3.8 (Ubuntu 20.04) and Python 3.12 (Ubuntu 24.04)_
 - CMake 3.15+
 - [ARGoS3](https://github.com/ilpincy/argos3.git)
 - [ARGoS3-KheperaIV plugin](https://github.com/ilpincy/argos3-kheperaiv)
