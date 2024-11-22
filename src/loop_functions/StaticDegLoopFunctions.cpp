@@ -87,7 +87,7 @@ void StaticDegLoopFunctions::Init(TConfigurationNode &t_tree)
         // Grab random KheperaIV static degradation controller
         auto &kheperaiv_entities_map = space_ptr_->GetEntitiesByType("kheperaiv");
         CKheperaIVEntity &random_kheperaiv_entity = *any_cast<CKheperaIVEntity *>(kheperaiv_entities_map.begin()->second);
-        KheperaIVStaticDeg &static_deg_controller = dynamic_cast<KheperaIVStaticDeg &>(random_kheperaiv_entity.GetControllableEntity().GetController());
+        KheperaIVDiffusionMotion &static_deg_controller = dynamic_cast<KheperaIVDiffusionMotion &>(random_kheperaiv_entity.GetControllableEntity().GetController());
 
         // Grab sensor accuracies
         exp_params_.ActualSensorAcc = static_deg_controller.GetGroundSensorParams().ActualSensorAcc;
@@ -210,7 +210,7 @@ void StaticDegLoopFunctions::Init(TConfigurationNode &t_tree)
         for (size_t i = 0; i < num_correct_robots; ++i)
         {
             CKheperaIVEntity &kheperaiv_entity = *any_cast<CKheperaIVEntity *>(kheperaiv_entities_map_ptr_->at(sorted_robot_ids_[i]));
-            KheperaIVStaticDeg &controller = dynamic_cast<KheperaIVStaticDeg &>(kheperaiv_entity.GetControllableEntity().GetController());
+            KheperaIVDiffusionMotion &controller = dynamic_cast<KheperaIVDiffusionMotion &>(kheperaiv_entity.GetControllableEntity().GetController());
 
             controller.UpdateAssumedSensorAcc(exp_params_.ActualSensorAcc, true);
             controller.ActivateDegradationFilter();
@@ -222,7 +222,7 @@ void StaticDegLoopFunctions::Init(TConfigurationNode &t_tree)
     for (size_t i = num_correct_robots; i < exp_params_.NumRobots; ++i)
     {
         CKheperaIVEntity &kheperaiv_entity = *any_cast<CKheperaIVEntity *>(kheperaiv_entities_map_ptr_->at(sorted_robot_ids_[i]));
-        KheperaIVStaticDeg &controller = dynamic_cast<KheperaIVStaticDeg &>(kheperaiv_entity.GetControllableEntity().GetController());
+        KheperaIVDiffusionMotion &controller = dynamic_cast<KheperaIVDiffusionMotion &>(kheperaiv_entity.GetControllableEntity().GetController());
 
         controller.UpdateAssumedSensorAcc(exp_params_.AssumedSensorAcc, true);
         controller.ActivateDegradationFilter();
@@ -257,7 +257,7 @@ void StaticDegLoopFunctions::SetupExperiment()
     {
         // Get reference to the robot's controller
         CKheperaIVEntity &kheperaiv_entity = *any_cast<CKheperaIVEntity *>(kheperaiv_entities_map_ptr_->at(sorted_robot_ids_[i]));
-        KheperaIVStaticDeg &controller = dynamic_cast<KheperaIVStaticDeg &>(kheperaiv_entity.GetControllableEntity().GetController());
+        KheperaIVDiffusionMotion &controller = dynamic_cast<KheperaIVDiffusionMotion &>(kheperaiv_entity.GetControllableEntity().GetController());
 
         // Set the robots' RNG seed (based on top-level seed + ID)
         controller.SetRNGSeed(GetSimulator().GetRandomSeed() + i);
@@ -274,7 +274,7 @@ void StaticDegLoopFunctions::PostStep()
     {
         // Get reference to the robot's controller
         CKheperaIVEntity &kheperaiv_entity = *any_cast<CKheperaIVEntity *>(kheperaiv_entities_map_ptr_->at(sorted_robot_ids_[i]));
-        KheperaIVStaticDeg &controller = dynamic_cast<KheperaIVStaticDeg &>(kheperaiv_entity.GetControllableEntity().GetController());
+        KheperaIVDiffusionMotion &controller = dynamic_cast<KheperaIVDiffusionMotion &>(kheperaiv_entity.GetControllableEntity().GetController());
 
         // Convert and store data string
         id_data_str_map_[kheperaiv_entity.GetId()].push_back(ConvertDataToString(controller.GetData()));

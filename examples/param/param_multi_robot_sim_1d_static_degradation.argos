@@ -47,7 +47,7 @@
         - library: the path to the compiled library containing you
           controller.
     -->
-        <kheperaiv_static_deg_controller id="ksdc"
+        <kheperaiv_diffusion_motion_controller id="ksdc"
             library="controllers/libsensor_degradation_filter_controllers">
             <actuators>
                 <differential_steering implementation="default" />
@@ -62,19 +62,19 @@
             </sensors>
             <params>
                 <diffusion go_straight_angle_range="-5:5" delta="0.1" />
-                <ground_sensor period_ticks="1" sensor_acc_b="0.95" sensor_acc_w="0.95" />
+                <ground_sensor period_ticks="1" sensor_acc_b="0.95" sensor_acc_w="0.95" sim="true" />
                 <comms period_ticks="10" />
                 <wheel_turning hard_turn_angle_threshold="90"
                     soft_turn_angle_threshold="70"
                     no_turn_angle_threshold="10"
                     max_speed="10" /> <!-- speed in cm/s -->
-                <static_degradation_filter sim="true" method="ALPHA" period_ticks="1000">
+                <sensor_degradation_filter method="BRAVO" period_ticks="1000">
                     <params type_2_err_prob="0.05" /> <!-- BRAVO filter specific parameters -->
-                </static_degradation_filter>
+                </sensor_degradation_filter>
                 <!-- <static_degradation sim="false" assumed_sensor_acc_b="0.75"
                 assumed_sensor_acc_w="0.75" /> -->
             </params>
-        </kheperaiv_static_deg_controller>
+        </kheperaiv_diffusion_motion_controller>
     </controllers>
 
     <!-- ****************** -->

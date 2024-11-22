@@ -2,7 +2,7 @@
 # Add controller library
 add_library(${PROJECT_NAME}_controllers
     SHARED
-    KheperaIVStaticDeg.cpp
+    KheperaIVDiffusionMotion.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}_controllers
