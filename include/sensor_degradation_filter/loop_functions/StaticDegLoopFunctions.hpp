@@ -12,7 +12,7 @@
 #include "Util.hpp"
 #include "json.hpp"
 #include "Arena.hpp"
-#include "controllers/KheperaIVStaticDeg.hpp"
+#include "controllers/KheperaIVDiffusionMotion.hpp"
 
 using namespace argos;
 using namespace nlohmann;

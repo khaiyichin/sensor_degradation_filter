@@ -10,7 +10,6 @@ void StaticDegradationFilterBravo::Init()
     type_2_err_prob_ = std::stod(params_ptr_->FilterSpecificParams["type_2_err_prob"].c_str());
 }
 
-#include <iostream>
 bool StaticDegradationFilterBravo::CompareWithNeighborEstimates()
 {
     std::vector<CollectivePerception::EstConfPair> neighbor_estconf_vec = collective_perception_algo_ptr_->GetParamsPtr()->MostRecentNeighborEstimates;

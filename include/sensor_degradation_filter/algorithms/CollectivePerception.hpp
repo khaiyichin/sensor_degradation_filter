@@ -7,6 +7,7 @@
 #include <numeric>
 #include <unordered_map>
 #include <memory>
+#include <deque>
 
 #define ZERO_APPROX 1.0e-6
 
@@ -70,13 +71,39 @@ public:
         {
             NumBlackTilesSeen = 0;
             NumObservations = 0;
+            ObservationQueue.clear();
+        }
+
+        void AddToQueue(unsigned int obs)
+        {
+            ObservationQueue.push_back(obs);
+
+            // Adjust queue items to a fixed queue size
+            if (ObservationQueue.size() > MaxObservationQueueSize)
+            {
+                ObservationQueue.pop_front();
+                NumObservations = MaxObservationQueueSize;
+            }
+            else
+            {
+                NumObservations = ObservationQueue.size();
+            }
+
+            // Calculate number of black tiles seen
+            NumBlackTilesSeen = std::accumulate(ObservationQueue.begin(), ObservationQueue.end(), 0);
         }
 
         unsigned int NumBlackTilesSeen = 0;
 
         unsigned int NumObservations = 0;
 
+        unsigned int MaxObservationQueueSize = 0;
+
+        std::deque<unsigned int> ObservationQueue;
+
         std::vector<EstConfPair> MostRecentNeighborEstimates;
+
+        bool UseObservationQueue = false;
     };
 
     CollectivePerception() : params_ptr_(std::make_shared<Params>()) {}

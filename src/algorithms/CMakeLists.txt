@@ -4,6 +4,8 @@ add_library(${PROJECT_NAME}_algorithms
     CollectivePerception.cpp
     StaticDegradationFilterAlpha.cpp
     StaticDegradationFilterBravo.cpp
+    DynamicDegradationFilterCharlie.cpp
+    ELBO.cpp
 )
 
 target_include_directories(${PROJECT_NAME}_algorithms
@@ -12,6 +14,7 @@ target_include_directories(${PROJECT_NAME}_algorithms
 )
 
 target_link_libraries(${PROJECT_NAME}_algorithms
-    PRIVATE
+    PUBLIC
     GSL::gsl
+    NLopt::nlopt
 )

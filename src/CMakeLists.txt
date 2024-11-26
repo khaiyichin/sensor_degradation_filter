@@ -1,6 +1,7 @@
 add_subdirectory(algorithms)
 add_subdirectory(controllers)
 add_subdirectory(loop_functions)
+add_subdirectory(tests)
 
 # Add executable to start simulation
 add_executable(run_dynamic_topo_simulations run_dynamic_topo_simulations.cpp)

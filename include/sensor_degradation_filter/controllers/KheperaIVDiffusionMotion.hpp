@@ -69,9 +69,10 @@ public:
     struct GroundSensorParams
     {
         bool IsSimulated = true;
+        bool IsDynamic = false;
         UInt32 GroundMeasurementPeriodTicks;
         std::unordered_map<std::string, Real> ActualSensorAcc = {{"b", -1.0}, {"w", -1.0}};
-        std::unordered_map<std::string, Real> DegradationCoefficients = {{"drift", -1.0}, {"diffusion", -1.0}};
+        std::unordered_map<std::string, Real> DegradationCoefficients = {{"drift", 0.0}, {"diffusion", -1.0}};
     };
 
     struct CommsParams
@@ -133,6 +134,8 @@ private:
     CVector2 ComputeDiffusionVector();
 
     void SetWheelSpeedsFromVector(const CVector2 &heading_vector);
+
+    void EvolveSensorDegradation();
 
 protected:
     /* Pointer to the range and bearing actuator */
