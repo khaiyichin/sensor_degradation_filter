@@ -23,7 +23,7 @@
           or set to zero, this value is taken from the clock and a warning
           message is displayed.
     -->
-        <experiment length="400" ticks_per_second="10" random_seed="1240" />
+        <experiment length="1000" ticks_per_second="10" random_seed="1240" />
     </framework>
 
     <!-- *************** -->
@@ -63,14 +63,30 @@
 
             <params>
                 <diffusion go_straight_angle_range="-1:1" delta="0.005" />
-                <ground_sensor period_ticks="1" sensor_acc_b="0.95" sensor_acc_w="0.95" sim="true" />
+                <ground_sensor
+                    period_ticks="1"
+                    sensor_acc_b="0.99"
+                    sensor_acc_w="0.99"
+                    sim="true"
+                    dynamic="true"
+                    true_deg_drift_coeff="-5e-5"
+                    true_deg_diffusion_coeff="1e-4"
+                />
                 <comms period_ticks="10" />
                 <wheel_turning hard_turn_angle_threshold="90"
                     soft_turn_angle_threshold="70"
                     no_turn_angle_threshold="10"
                     max_speed="10" /> <!-- speed in cm/s -->
-                <sensor_degradation_filter method="BRAVO" period_ticks="100">
-                    <params type_2_err_prob="0.05" /> <!-- BRAVO filter specific parameters -->
+                <sensor_degradation_filter method="CHARLIE" period_ticks="10" observation_queue_size="200">
+                    <!-- BRAVO filter specific parameters -->
+                    <!-- <params type_2_err_prob="0.05" /> -->
+                    <!-- CHARLIE filter specific parameters -->
+                    <params
+                        pred_deg_model_B="-5e-5"
+                        pred_deg_variance_R="1e-4"
+                        init_mean="0.99"
+                        init_cov="0.001"
+                    />
                 </sensor_degradation_filter>
             </params>
         </kheperaiv_diffusion_motion_controller>
@@ -84,10 +100,10 @@
         library="build_argos/src/loop_functions/libsensor_degradation_filter_loop_functions"
         label="static_deg_loop_functions">
         <static_degradation>
-            <num_trials value="3" />
+            <num_trials value="2" />
             <arena_tiles tile_count_x="500" tile_count_y="500" /> <!-- number of tiles for the arena -->
             <target_fill_ratio value="0.75" /> <!-- range of target fill ratios -->
-            <flawed_robots num="0" acc_b="0.75" acc_w="0.75" activate_filter_for_all="false" />
+            <flawed_robots num="0" acc_b="0.75" acc_w="0.75" activate_filter_for_all="true" />
             <path folder="data/temp" /> <!-- path to the output data and datetime in filename -->
             <verbosity level="full" /> <!-- "full", "none" -->
         </static_degradation>
@@ -111,36 +127,37 @@
  
       $ argos3 -q box
   -->
-    <arena size="3.0353, 3.0226, 1" center="0,0,0.5">
+    <arena size="5, 5, 1" center="0,0,0.5">
+    <!-- <arena size="3.0353, 3.0226, 1" center="0,0,0.5"> -->
 
-        <!-- <floor id="floor" source="loop_functions" pixels_per_meter="200" /> -->
-        <floor id="floor" source="image" path="argos/floor_qr_code_pattern_black_white.png" />
+        <floor id="floor" source="loop_functions" pixels_per_meter="200" />
+        <!-- <floor id="floor" source="image" path="argos/floor_qr_code_pattern_black_white.png" /> -->
 
         <!-- Place four boxes in a square to delimit the arena -->
         <!-- <box id="wall_north" size="5.25,0.1,0.5" movable="false"> -->
         <box id="wall_north" size="10,0.1,0.5" movable="false">
-            <body position="0,1.65,0" orientation="0,0,0" />
+            <body position="0,1.5,0" orientation="0,0,0" />
             <!-- <body position="0,2.8243291083242075,0" orientation="0,0,0" /> -->
             <!-- <body position="0,2.011746925739275,0" orientation="0,0,0" /> -->
             <!-- <body position="0,1.290717695633861,0" orientation="0,0,0" /> -->
             <!-- <body position="0,0.9273198961208501,0" orientation="0,0,0" /> -->
         </box>
         <box id="wall_south" size="10,0.1,0.5" movable="false">
-            <body position="0,-1.65,0" orientation="0,0,0" />
+            <body position="0,-1.5,0" orientation="0,0,0" />
             <!-- <body position="0,-2.8243291083242075,0" orientation="0,0,0" /> -->
             <!-- <body position="0,-2.011746925739275,0" orientation="0,0,0" /> -->
             <!-- <body position="0,-1.290717695633861,0" orientation="0,0,0" /> -->
             <body position="0,-0.9273198961208501,0" orientation="0,0,0" />
         </box>
         <box id="wall_east" size="0.1,10,0.5" movable="false">
-            <body position="1.65,0,0" orientation="0,0,0" />
+            <body position="1.5,0,0" orientation="0,0,0" />
             <!-- <body position="2.8243291083242075,0,0" orientation="0,0,0" /> -->
             <!-- <body position="2.011746925739275,0,0" orientation="0,0,0" /> -->
             <!-- <body position="1.290717695633861,0,0" orientation="0,0,0" /> -->
             <body position="0.9273198961208501,0,0" orientation="0,0,0" />
         </box>
         <box id="wall_west" size="0.1,10,0.5" movable="false">
-            <body position="-1.65,0,0" orientation="0,0,0" />
+            <body position="-1.5,0,0" orientation="0,0,0" />
             <!-- <body position="-2.8243291083242075,0,0" orientation="0,0,0" /> -->
             <!-- <body position="-2.011746925739275,0,0" orientation="0,0,0" /> -->
             <!-- <body position="-1.290717695633861,0,0" orientation="0,0,0" /> -->
@@ -228,14 +245,14 @@
       $ argos3 -q visualizations
   -->
     <visualization>
-        <qt-opengl>
+        <!-- <qt-opengl>
             <camera>
                 <placements>
                     <placement index="0" position="0,0,8.14689" look_at="0,0,0" up="1,0,0"
                         lens_focal_length="35" />
                 </placements>
             </camera>
-        </qt-opengl>
+        </qt-opengl> -->
     </visualization>
 
 </argos-configuration>

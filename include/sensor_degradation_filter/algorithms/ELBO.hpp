@@ -9,6 +9,18 @@
 
 struct DistributionParameters
 {
+    void Reset()
+    {
+        PredictionMean = -1.0;
+        PredictionVariance = -1.0;
+        PredictionNormConst = -1.0;
+        FillRatio = -1.0;
+        SurrogateMean = -1.0;
+        SurrogateVariance = -1.0;
+        NumBlackTilesSeen = -1;
+        NumObservations = -1;
+    }
+
     double PredictionMean;
 
     double PredictionVariance;
@@ -24,8 +36,6 @@ struct DistributionParameters
     double SurrogateMean;
 
     double SurrogateVariance;
-
-    double SurrogateNormConst;
 
     double SurrogateLowerBound;
 
@@ -49,6 +59,8 @@ public:
     ELBO(double a, double b, size_t n = 1000);
 
     ~ELBO();
+
+    void Reset();
 
     /**
      * @brief Compute the normalization constant for the prediction model.

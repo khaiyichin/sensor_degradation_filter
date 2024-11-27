@@ -13,10 +13,6 @@ DynamicDegradationFilterCharlie::DynamicDegradationFilterCharlie(const std::shar
 
 void DynamicDegradationFilterCharlie::Init()
 {
-    // Set up usage of observation queue
-    collective_perception_algo_ptr_->GetParamsPtr()->UseObservationQueue = true;
-    collective_perception_algo_ptr_->GetParamsPtr()->MaxObservationQueueSize = std::stoi(params_ptr_->FilterSpecificParams["observation_queue_size"]);
-
     // Get the pointer to the distribution parameters (related to the distribution, not the filter parameters)
     distribution_params_ptr_ = elbo_.GetDistributionParametersPtr();
 
@@ -56,8 +52,8 @@ void DynamicDegradationFilterCharlie::Init()
 
     // Define the objective functions
     MAP_optimizer_.set_max_objective(nlopt_wrapped_MAP_fcn, &elbo_);
-    MAP_optimizer_.set_lower_bounds(0.5);
-    MAP_optimizer_.set_upper_bounds(1.0);
+    MAP_optimizer_.set_lower_bounds(limits.first);
+    MAP_optimizer_.set_upper_bounds(limits.second);
     MAP_optimizer_.set_xtol_abs(1e-9);
 
     ELBO_optimizer_.set_max_objective(nlopt_wrapped_ELBO_fcn, &elbo_);
@@ -65,15 +61,26 @@ void DynamicDegradationFilterCharlie::Init()
     ELBO_optimizer_.set_upper_bounds(HUGE_VAL); // HUGE_VAL is basically infinity
     ELBO_optimizer_.set_xtol_abs(1e-9);
 
+    // Initialize the prior (initial guess)
+    initial_mean_ = std::stod(params_ptr_->FilterSpecificParams["init_mean"]);
+    initial_cov_ = std::stod(params_ptr_->FilterSpecificParams["init_cov"]);
+
+    MAP_outcome_.first.push_back(initial_mean_);
+    ELBO_outcome_.first.push_back(initial_cov_);
+
     // Extract the prediction model parameters
-    model_a_ = std::stod(params_ptr_->FilterSpecificParams["pred_deg_model_A"].c_str());
+    model_b_ = std::stod(params_ptr_->FilterSpecificParams["pred_deg_model_B"].c_str());
     variance_r_ = std::stod(params_ptr_->FilterSpecificParams["pred_deg_variance_R"].c_str());
+
+    // Set the maximum number of past informed estimates to collect
+    max_informed_estimate_history_length_ = collective_perception_algo_ptr_->GetParamsPtr()->MaxObservationQueueSize;
 }
 
 void DynamicDegradationFilterCharlie::Predict()
 {
-    distribution_params_ptr_->PredictionMean = model_a_ * MAP_outcome_.first[0];                               // a*x
-    distribution_params_ptr_->PredictionVariance = model_a_ * model_a_ * ELBO_outcome_.first[0] + variance_r_; // a^2 * sigma^2 + r
+    // Compute predicted mean and variance based on a = 1, b = model_b_, and r = variance_r_
+    distribution_params_ptr_->PredictionMean = MAP_outcome_.first[0] + params_ptr_->FilterActivationPeriodTicks * model_b_;         // a^t*x + b*t
+    distribution_params_ptr_->PredictionVariance = ELBO_outcome_.first[0] + variance_r_ * params_ptr_->FilterActivationPeriodTicks; // a^(2*t) * sigma^2 + r*t
 }
 
 void DynamicDegradationFilterCharlie::Update()
@@ -81,7 +88,6 @@ void DynamicDegradationFilterCharlie::Update()
     // Update the binomial likelihood values
     distribution_params_ptr_->NumObservations = collective_perception_algo_ptr_->GetParamsPtr()->NumObservations;
     distribution_params_ptr_->NumBlackTilesSeen = collective_perception_algo_ptr_->GetParamsPtr()->NumBlackTilesSeen;
-    distribution_params_ptr_->FillRatio = collective_perception_algo_ptr_->GetInformedVals().X;
 
     // Estimate the truncated normal mean
     MAP_optimization_status_ = MAP_optimizer_.optimize(MAP_outcome_.first, MAP_outcome_.second);
@@ -110,6 +116,16 @@ void DynamicDegradationFilterCharlie::Update()
 
 void DynamicDegradationFilterCharlie::Estimate()
 {
+    // Collect informed estimate into weighted average queue (if an observation queue is used)
+    if (max_informed_estimate_history_length_ > 1)
+    {
+        ComputeWeightedAverageFillRatio();
+    }
+    else
+    {
+        distribution_params_ptr_->FillRatio = collective_perception_algo_ptr_->GetInformedVals().X;
+    }
+
     // Execute prediction step
     Predict();
 
@@ -119,4 +135,26 @@ void DynamicDegradationFilterCharlie::Estimate()
     // Update assumed sensor accuracy
     params_ptr_->AssumedSensorAcc["b"] = MAP_outcome_.first[0];
     params_ptr_->AssumedSensorAcc["w"] = MAP_outcome_.first[0];
+}
+
+void DynamicDegradationFilterCharlie::ComputeWeightedAverageFillRatio()
+{
+    // Store the most recent informed estimate
+    informed_estimate_history_.push_back(collective_perception_algo_ptr_->GetInformedVals().X);
+
+    if (informed_estimate_history_.size() > max_informed_estimate_history_length_)
+    {
+        informed_estimate_history_.pop_front();
+    }
+
+    // Compute the weighted average (weighing older estimates as heavier)
+    double numerator = 0.0;
+    double denominator = informed_estimate_history_.size() * (informed_estimate_history_.size() + 1) / 2.0;
+
+    for (size_t i = informed_estimate_history_.size(); i > 0; --i)
+    {
+        numerator += i * informed_estimate_history_[informed_estimate_history_.size() - i];
+    }
+
+    distribution_params_ptr_->FillRatio = numerator / denominator;
 }

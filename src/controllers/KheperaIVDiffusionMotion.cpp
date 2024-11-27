@@ -113,6 +113,8 @@ void KheperaIVDiffusionMotion::Init(TConfigurationNode &xml_node)
     GetNodeAttribute(GetNode(xml_node, "ground_sensor"), "true_deg_diffusion_coeff", ground_sensor_params_.DegradationCoefficients["diffusion"]);
     GetNodeAttribute(GetNode(xml_node, "comms"), "period_ticks", comms_params_.CommsPeriodTicks);
 
+    ground_sensor_params_.InitialActualAcc = ground_sensor_params_.ActualSensorAcc;
+
     // Initialize degradation filter
     TConfigurationNode &sensor_degradation_filter_node = GetNode(xml_node, "sensor_degradation_filter");
 
@@ -147,15 +149,17 @@ void KheperaIVDiffusionMotion::Init(TConfigurationNode &xml_node)
             std::make_shared<DynamicDegradationFilterCharlie>(collective_perception_algo_ptr_);
         sensor_degradation_filter_ptr_->GetParamsPtr()->Method = "CHARLIE";
 
-        std::string pred_deg_model_A_str, pred_deg_variance_R_str, queue_size_str;
+        std::string pred_deg_model_B_str, pred_deg_variance_R_str, init_mean_str, init_cov_str;
 
-        GetNodeAttribute(GetNode(sensor_degradation_filter_node, "params"), "pred_deg_model_A", pred_deg_model_A_str);
+        GetNodeAttribute(GetNode(sensor_degradation_filter_node, "params"), "pred_deg_model_B", pred_deg_model_B_str);
         GetNodeAttribute(GetNode(sensor_degradation_filter_node, "params"), "pred_deg_variance_R", pred_deg_variance_R_str);
-        GetNodeAttribute(GetNode(sensor_degradation_filter_node, "params"), "observation_queue_size", queue_size_str);
+        GetNodeAttribute(GetNode(sensor_degradation_filter_node, "params"), "init_cov", init_cov_str);
+        GetNodeAttribute(GetNode(sensor_degradation_filter_node, "params"), "init_mean", init_mean_str);
 
-        sensor_degradation_filter_ptr_->GetParamsPtr()->FilterSpecificParams = {{"pred_deg_model_A", pred_deg_model_A_str}};
-        sensor_degradation_filter_ptr_->GetParamsPtr()->FilterSpecificParams = {{"pred_deg_variance_R", pred_deg_variance_R_str}};
-        sensor_degradation_filter_ptr_->GetParamsPtr()->FilterSpecificParams = {{"observation_queue_size", queue_size_str}};
+        sensor_degradation_filter_ptr_->GetParamsPtr()->FilterSpecificParams = {{"pred_deg_model_B", pred_deg_model_B_str},
+                                                                                {"pred_deg_variance_R", pred_deg_variance_R_str},
+                                                                                {"init_cov", init_cov_str},
+                                                                                {"init_mean", init_mean_str}};
     }
     // else if (method == "DELTA")
     // {
@@ -164,8 +168,6 @@ void KheperaIVDiffusionMotion::Init(TConfigurationNode &xml_node)
     {
         throw std::runtime_error("Unknown static degradation filter method, please double-check the XML file.");
     }
-
-    // GetNodeAttribute(sensor_degradation_filter_node, "sim", ground_sensor_params_.IsSimulated);
 
     SensorDegradationFilter::Params &sensor_degradation_filter_params = *sensor_degradation_filter_ptr_->GetParamsPtr();
 
@@ -193,9 +195,23 @@ void KheperaIVDiffusionMotion::Init(TConfigurationNode &xml_node)
 
     GetNodeAttribute(sensor_degradation_filter_node, "period_ticks", sensor_degradation_filter_params.FilterActivationPeriodTicks);
 
+    // Check whether to use an observation queue
+    UInt32 obs_queue_size;
+
+    GetNodeAttribute(sensor_degradation_filter_node, "observation_queue_size", obs_queue_size);
+
+    if (obs_queue_size != 0)
+    {
+        collective_perception_algo_ptr_->GetParamsPtr()->UseObservationQueue = true;
+        collective_perception_algo_ptr_->GetParamsPtr()->MaxObservationQueueSize = obs_queue_size;
+    }
+
     /* Create a random number generator. We use the 'argos' category so
        that creation, reset, seeding and cleanup are managed by ARGoS. */
     RNG_ptr_ = CRandom::CreateRNG("argos");
+
+    // Initialize the filter algorithms
+    sensor_degradation_filter_ptr_->Init();
 }
 
 void KheperaIVDiffusionMotion::Reset()
@@ -203,6 +219,9 @@ void KheperaIVDiffusionMotion::Reset()
     tick_counter_ = 0;
 
     collective_perception_algo_ptr_->Reset();
+
+    // Reset the actual ground sensor accuracies
+    ground_sensor_params_.ActualSensorAcc = ground_sensor_params_.InitialActualAcc;
 
     if (sensor_degradation_filter_ptr_->GetParamsPtr()->RunDegradationFilter)
     {
@@ -234,7 +253,9 @@ std::vector<Real> KheperaIVDiffusionMotion::GetData() const
             collective_perception_algo_ptr_->GetSocialVals().Confidence,
             collective_perception_algo_ptr_->GetInformedVals().X,
             sensor_degradation_filter_ptr_->GetParamsPtr()->AssumedSensorAcc.at("b"),
-            sensor_degradation_filter_ptr_->GetParamsPtr()->AssumedSensorAcc.at("w")};
+            sensor_degradation_filter_ptr_->GetParamsPtr()->AssumedSensorAcc.at("w"),
+            ground_sensor_params_.ActualSensorAcc.at("b"),
+            ground_sensor_params_.ActualSensorAcc.at("w")};
 }
 
 void KheperaIVDiffusionMotion::SetLEDs(const CColor &color)
@@ -340,7 +361,7 @@ void KheperaIVDiffusionMotion::EvolveSensorDegradation()
         THROW_ARGOSEXCEPTION("Can only simulate sensor degradation with a negative drift coefficient.");
     }
 
-    ground_sensor_params_.ActualSensorAcc["b"] += RNG_ptr_->Gaussian(ground_sensor_params_.DegradationCoefficients["diffusion"] > 0.0, ground_sensor_params_.DegradationCoefficients["drift"]);
+    ground_sensor_params_.ActualSensorAcc["b"] += RNG_ptr_->Gaussian(ground_sensor_params_.DegradationCoefficients["diffusion"], ground_sensor_params_.DegradationCoefficients["drift"]);
 
     // Saturate sensor accuracy levels
     // ground_sensor_params_.ActualSensorAcc["b"] = std::min(std::max(ground_sensor_params_.ActualSensorAcc["b"], 0.5 + ZERO_APPROX), 1.0 + ZERO_APPROX);

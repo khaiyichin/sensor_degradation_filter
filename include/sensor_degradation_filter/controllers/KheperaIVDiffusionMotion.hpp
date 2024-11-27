@@ -72,6 +72,7 @@ public:
         bool IsDynamic = false;
         UInt32 GroundMeasurementPeriodTicks;
         std::unordered_map<std::string, Real> ActualSensorAcc = {{"b", -1.0}, {"w", -1.0}};
+        std::unordered_map<std::string, Real> InitialActualAcc = {{"b", -1.0}, {"w", -1.0}};
         std::unordered_map<std::string, Real> DegradationCoefficients = {{"drift", 0.0}, {"diffusion", -1.0}};
     };
 

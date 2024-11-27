@@ -22,12 +22,24 @@ public:
 
     virtual void Init() override;
 
+    virtual void Reset() override
+    {
+        SensorDegradationFilter::Reset();
+
+        MAP_outcome_.first[0] = initial_mean_;
+        ELBO_outcome_.first[0] = initial_cov_;
+
+        informed_estimate_history_.clear();
+    }
+
     virtual void Estimate();
 
 private:
     virtual void Predict();
 
     virtual void Update();
+
+    virtual void ComputeWeightedAverageFillRatio();
 
     std::shared_ptr<CollectivePerception> collective_perception_algo_ptr_;
 
@@ -47,11 +59,17 @@ private:
 
     std::pair<std::vector<double>, double> ELBO_outcome_;
 
-    std::deque<double> observations_;
+    std::deque<double> informed_estimate_history_;
 
-    double model_a_;
+    size_t max_informed_estimate_history_length_;
 
-    double variance_r_;
+    double model_b_; // our model of what the drift coefficient is
+
+    double variance_r_; // our model of what the diffusion coefficient is
+
+    double initial_mean_;
+
+    double initial_cov_;
 };
 
 #endif

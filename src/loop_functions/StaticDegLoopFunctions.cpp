@@ -40,7 +40,10 @@ void StaticDegLoopFunctions::Init(TConfigurationNode &t_tree)
         Real length_x = arena_size.GetX() / arena_x; // tile size in the x-direction
         Real length_y = arena_size.GetY() / arena_y; // tile size in the y-direction
 
-        assert(length_x == length_y); // only square tiles allowed
+        if (length_x != length_y)
+        {
+            LOGERR << "[WARNING] Tile sizes aren't square; implicitly making square tiles with an edge length that follows the provided x-axis dimension." << std::endl;
+        }
         arena_tile_size_ = length_x;
 
         // Grab the constrained area to compute the true swarm density
@@ -87,10 +90,10 @@ void StaticDegLoopFunctions::Init(TConfigurationNode &t_tree)
         // Grab random KheperaIV static degradation controller
         auto &kheperaiv_entities_map = space_ptr_->GetEntitiesByType("kheperaiv");
         CKheperaIVEntity &random_kheperaiv_entity = *any_cast<CKheperaIVEntity *>(kheperaiv_entities_map.begin()->second);
-        KheperaIVDiffusionMotion &static_deg_controller = dynamic_cast<KheperaIVDiffusionMotion &>(random_kheperaiv_entity.GetControllableEntity().GetController());
+        KheperaIVDiffusionMotion &diffusion_controller = dynamic_cast<KheperaIVDiffusionMotion &>(random_kheperaiv_entity.GetControllableEntity().GetController());
 
         // Grab sensor accuracies
-        exp_params_.ActualSensorAcc = static_deg_controller.GetGroundSensorParams().ActualSensorAcc;
+        exp_params_.ActualSensorAcc = diffusion_controller.GetGroundSensorParams().ActualSensorAcc;
 
         TConfigurationNode &flawed_robots_node = GetNode(static_deg_node, "flawed_robots");
         GetNodeAttribute(flawed_robots_node, "num", exp_params_.NumFlawedRobots);
@@ -99,16 +102,24 @@ void StaticDegLoopFunctions::Init(TConfigurationNode &t_tree)
         GetNodeAttribute(flawed_robots_node, "activate_filter_for_all", exp_params_.FilterActiveForAll);
 
         // Grab robot speeds
-        exp_params_.RobotSpeed = static_deg_controller.GetWheelTurningParams().MaxSpeed;
+        exp_params_.RobotSpeed = diffusion_controller.GetWheelTurningParams().MaxSpeed;
 
         // Grab sensing and communications period
-        exp_params_.MeasurementPeriod = static_deg_controller.GetGroundSensorParams().GroundMeasurementPeriodTicks;
-        exp_params_.CommsPeriod = static_deg_controller.GetCommsParams().CommsPeriodTicks;
+        exp_params_.MeasurementPeriod = diffusion_controller.GetGroundSensorParams().GroundMeasurementPeriodTicks;
+        exp_params_.CommsPeriod = diffusion_controller.GetCommsParams().CommsPeriodTicks;
 
         // Grab filter parameters
-        exp_params_.FilterMethod = static_deg_controller.GetSensorDegradationFilterParams().Method;
-        exp_params_.FilterPeriod = static_deg_controller.GetSensorDegradationFilterParams().FilterActivationPeriodTicks;
-        exp_params_.FilterSpecificParams = static_deg_controller.GetSensorDegradationFilterParams().FilterSpecificParams;
+        exp_params_.FilterMethod = diffusion_controller.GetSensorDegradationFilterParams().Method;
+        exp_params_.FilterPeriod = diffusion_controller.GetSensorDegradationFilterParams().FilterActivationPeriodTicks;
+        exp_params_.FilterSpecificParams = diffusion_controller.GetSensorDegradationFilterParams().FilterSpecificParams;
+
+        // Grab ground sensor parameters
+        exp_params_.DynamicDegradation = diffusion_controller.GetGroundSensorParams().IsDynamic;
+        exp_params_.GroundSensorDriftCoeff = diffusion_controller.GetGroundSensorParams().DegradationCoefficients["drift"];
+        exp_params_.GroundSensorDiffusionCoeff = diffusion_controller.GetGroundSensorParams().DegradationCoefficients["diffusion"];
+
+        // Grab observation queue size (0 if no queue is used)
+        exp_params_.ObservationQueueSize = diffusion_controller.GetCollectivePerceptionParams().MaxObservationQueueSize;
 
         // Grab number of robots and communications range
         UInt64 size;
@@ -363,6 +374,10 @@ void StaticDegLoopFunctions::InitializeJSON()
     }
 
     curr_json_["tfr"] = exp_params_.TargetFillRatio;
+    curr_json_["dynamic_degradation"] = exp_params_.DynamicDegradation;
+    curr_json_["true_drift_coeff"] = exp_params_.GroundSensorDriftCoeff;
+    curr_json_["true_diffusion_coeff"] = exp_params_.GroundSensorDiffusionCoeff;
+    curr_json_["obs_queue_size"] = exp_params_.ObservationQueueSize;
     curr_json_["flawed_sensor_acc_b"] = exp_params_.AssumedSensorAcc["b"];
     curr_json_["flawed_sensor_acc_w"] = exp_params_.AssumedSensorAcc["w"];
     curr_json_["correct_sensor_acc_b"] = exp_params_.ActualSensorAcc["b"];
@@ -394,8 +409,10 @@ std::string StaticDegLoopFunctions::ConvertDataToString(const std::vector<Real> 
         data[5] = x_bar
         data[6] = beta
         data[7] = x
-        data[8] = sensor_acc_b
-        data[9] = sensor_acc_w
+        data[8] = assumed_sensor_acc_b
+        data[9] = assumed_sensor_acc_w
+        data[10] = true_sensor_acc_b
+        data[11] = true_sensor_acc_w
 
         data[3] onwards contain floating point numbers
     */
@@ -407,7 +424,7 @@ std::string StaticDegLoopFunctions::ConvertDataToString(const std::vector<Real> 
     for (auto itr = data.begin(); itr != data.end(); ++itr)
     {
         // Increase precision for floating point numbers
-        if (itr-data.begin() == 3)
+        if (itr - data.begin() == 3)
         {
             ss.precision(6);
             ss << std::fixed;
@@ -416,7 +433,7 @@ std::string StaticDegLoopFunctions::ConvertDataToString(const std::vector<Real> 
         ss << *itr << ",";
     }
 
-    return ss.str().substr(0, ss.str().size()-1); // return without the last comma
+    return ss.str().substr(0, ss.str().size() - 1); // return without the last comma
 }
 
 void StaticDegLoopFunctions::ResetRobotPositions()

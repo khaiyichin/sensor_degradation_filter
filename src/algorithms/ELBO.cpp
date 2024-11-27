@@ -1,5 +1,4 @@
 #include "algorithms/ELBO.hpp"
-#include <iostream> // for debugging
 
 /**
  * @brief PDF of a truncated normal distribution used in the surrogate model
@@ -60,7 +59,8 @@ double observation_likelihood_binomial_pdf(double x, void *params)
  */
 double joint_density_fcn(double x, void *params)
 {
-    return observation_likelihood_binomial_pdf(x, params) * prediction_trunc_normal_pdf(x, params);
+    double joint_value = observation_likelihood_binomial_pdf(x, params) * prediction_trunc_normal_pdf(x, params);
+    return joint_value <= 0.0 ? 1e-9 : joint_value; // ensure that a non-zero value is returned
 }
 
 /**
@@ -88,6 +88,11 @@ ELBO::ELBO(double a, double b, size_t n /* 1000 */)
 ELBO::~ELBO()
 {
     gsl_integration_workspace_free(workspace_);
+}
+
+void ELBO::Reset()
+{
+    integration_parameters_ptr_->Reset();
 }
 
 void ELBO::ComputePredictionNormalizationConstant()

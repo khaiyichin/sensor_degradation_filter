@@ -33,6 +33,8 @@ struct ExperimentParams
 
     UInt32 FilterPeriod;
 
+    UInt32 ObservationQueueSize = 0;
+
     UInt64 NumSteps;
 
     std::unordered_map<std::string, std::string> FilterSpecificParams;
@@ -49,11 +51,17 @@ struct ExperimentParams
 
     Real TargetFillRatio;
 
+    Real GroundSensorDriftCoeff;
+
+    Real GroundSensorDiffusionCoeff;
+
     UInt32 MaxPlacementTrials;
 
     bool DistributeRobotPlacement = false;
 
     bool FilterActiveForAll;
+
+    bool DynamicDegradation;
 
     std::string FilterMethod;
 
