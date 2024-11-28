@@ -47,7 +47,7 @@
         - library: the path to the compiled library containing you
           controller.
     -->
-        <kheperaiv_diffusion_motion_controller id="ksdc"
+        <kheperaiv_diffusion_motion_controller id="kdmc"
             library="build_argos/src/controllers/libsensor_degradation_filter_controllers">
             <actuators>
                 <differential_steering implementation="default" />
@@ -77,15 +77,15 @@
                     soft_turn_angle_threshold="70"
                     no_turn_angle_threshold="10"
                     max_speed="10" /> <!-- speed in cm/s -->
-                <sensor_degradation_filter method="CHARLIE" period_ticks="10" observation_queue_size="200">
+                <sensor_degradation_filter method="CHARLIE" period_ticks="10" observation_queue_size="100">
                     <!-- BRAVO filter specific parameters -->
                     <!-- <params type_2_err_prob="0.05" /> -->
                     <!-- CHARLIE filter specific parameters -->
                     <params
                         pred_deg_model_B="-5e-5"
                         pred_deg_variance_R="1e-4"
-                        init_mean="0.99"
-                        init_cov="0.001"
+                        init_mean_MAP="0.99"
+                        init_var_ELBO="0.001"
                     />
                 </sensor_degradation_filter>
             </params>
@@ -98,15 +98,13 @@
 
     <loop_functions
         library="build_argos/src/loop_functions/libsensor_degradation_filter_loop_functions"
-        label="static_deg_loop_functions">
-        <static_degradation>
-            <num_trials value="2" />
-            <arena_tiles tile_count_x="500" tile_count_y="500" /> <!-- number of tiles for the arena -->
-            <target_fill_ratio value="0.75" /> <!-- range of target fill ratios -->
-            <flawed_robots num="0" acc_b="0.75" acc_w="0.75" activate_filter_for_all="true" />
-            <path folder="data/temp" /> <!-- path to the output data and datetime in filename -->
-            <verbosity level="full" /> <!-- "full", "none" -->
-        </static_degradation>
+        label="sensor_deg_loop_functions">
+        <num_trials value="2" />
+        <arena_tiles tile_count_x="500" tile_count_y="500" /> <!-- number of tiles for the arena -->
+        <target_fill_ratio value="0.75" /> <!-- range of target fill ratios -->
+        <flawed_robots num="0" acc_b="0.75" acc_w="0.75" activate_filter_for_all="true" />
+        <path folder="data/temp" /> <!-- path to the output data and datetime in filename -->
+        <verbosity level="full" /> <!-- "full", "none" -->
     </loop_functions>
 
     <!-- *********************** -->
@@ -170,7 +168,7 @@
             <orientation method="uniform" min="0,0,0" max="360,0,0" />
             <entity quantity="8" max_trials="100" base_num="0">
                 <kheperaiv id="kiv" rab_data_size="50" rab_range="0.7">
-                    <controller config="ksdc" />
+                    <controller config="kdmc" />
                 </kheperaiv>
             </entity>
         </distribute>

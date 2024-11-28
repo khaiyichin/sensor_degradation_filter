@@ -133,7 +133,7 @@ sed -i "s/<comms period_ticks=.*/<comms period_ticks=\"${COMMS_PERIOD}\" \/>/" $
 sed -i "s/max_speed=.*/max_speed=\"${SPEED}\" \/>/" ${ARGOSFILE}
 
 # Configure filter
-sed -i "s/<static_degradation_filter.*/<static_degradation_filter sim=\"true\" method=\"${METHOD}\" period_ticks=\"${FILTER_PERIOD}\" >/" ${ARGOSFILE}
+sed -i "s/<sensor_degradation_filter.*/<sensor_degradation_filter method=\"${METHOD}\" period_ticks=\"${FILTER_PERIOD}\" observation_queue_size=\"0\" >/" ${ARGOSFILE}
 if [[ ${METHOD} == "BRAVO" ]]
 then
     sed -i "s/<params type_2_err_prob=.*/<params type_2_err_prob=\"${TYPE_2_ERR_PROB}\" \/>/" ${ARGOSFILE}
@@ -202,7 +202,7 @@ sed -i "s/<entity.*/<entity quantity=\"${NUM_ROBOTS}\" max_trials=\"100\" base_n
                     mkdir -p data/${JSON_FOLDER}
 
                     # Configure actual sensor accuracy
-                    sed -i "s/<ground_sensor period_ticks=.*/<ground_sensor period_ticks=\"${MEAS_PERIOD}\" sensor_acc_b=\"${CORRECT_DEC[j]}\" sensor_acc_w=\"${CORRECT_DEC[j]}\" \/>/" ${ARGOSFILE}
+                    sed -i "s/<ground_sensor period_ticks=.*/<ground_sensor period_ticks=\"${MEAS_PERIOD}\" sensor_acc_b=\"${CORRECT_DEC[j]}\" sensor_acc_w=\"${CORRECT_DEC[j]}\" sim=\"true\" dynamic=\"false\" \/>/" ${ARGOSFILE}
 
                     # Iterate over number of flawed robots
                     for l in $(seq ${FLAWED_ROBOT_RANGE[0]} ${FLAWED_ROBOT_RANGE[1]} ${FLAWED_ROBOT_RANGE[2]})

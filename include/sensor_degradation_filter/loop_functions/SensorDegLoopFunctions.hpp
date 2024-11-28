@@ -1,5 +1,5 @@
-#ifndef STATIC_DEG_LOOP_FUNCTIONS_HPP
-#define STATIC_DEG_LOOP_FUNCTIONS_HPP
+#ifndef SENSOR_DEG_LOOP_FUNCTIONS_HPP
+#define SENSOR_DEG_LOOP_FUNCTIONS_HPP
 
 #include <filesystem>
 #include <algorithm>
@@ -72,14 +72,14 @@ struct ExperimentParams
     std::shared_ptr<RealNumberGenerator> OrientationPlacementGeneratorPtr;
 };
 
-class StaticDegLoopFunctions : public CLoopFunctions
+class SensorDegLoopFunctions : public CLoopFunctions
 {
 public:
     /**
      * @brief Default destructor
      *
      */
-    virtual ~StaticDegLoopFunctions()
+    virtual ~SensorDegLoopFunctions()
     {
     }
 

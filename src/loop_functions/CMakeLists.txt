@@ -3,7 +3,7 @@
 add_library(${PROJECT_NAME}_loop_functions
     SHARED
     ../Arena.cpp
-    StaticDegLoopFunctions.cpp
+    SensorDegLoopFunctions.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}_loop_functions

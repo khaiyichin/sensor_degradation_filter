@@ -149,17 +149,17 @@ void KheperaIVDiffusionMotion::Init(TConfigurationNode &xml_node)
             std::make_shared<DynamicDegradationFilterCharlie>(collective_perception_algo_ptr_);
         sensor_degradation_filter_ptr_->GetParamsPtr()->Method = "CHARLIE";
 
-        std::string pred_deg_model_B_str, pred_deg_variance_R_str, init_mean_str, init_cov_str;
+        std::string pred_deg_model_B_str, pred_deg_variance_R_str, init_mean_MAP_str, init_var_ELBO_str;
 
         GetNodeAttribute(GetNode(sensor_degradation_filter_node, "params"), "pred_deg_model_B", pred_deg_model_B_str);
         GetNodeAttribute(GetNode(sensor_degradation_filter_node, "params"), "pred_deg_variance_R", pred_deg_variance_R_str);
-        GetNodeAttribute(GetNode(sensor_degradation_filter_node, "params"), "init_cov", init_cov_str);
-        GetNodeAttribute(GetNode(sensor_degradation_filter_node, "params"), "init_mean", init_mean_str);
+        GetNodeAttribute(GetNode(sensor_degradation_filter_node, "params"), "init_var_ELBO", init_var_ELBO_str);
+        GetNodeAttribute(GetNode(sensor_degradation_filter_node, "params"), "init_mean_MAP", init_mean_MAP_str);
 
         sensor_degradation_filter_ptr_->GetParamsPtr()->FilterSpecificParams = {{"pred_deg_model_B", pred_deg_model_B_str},
                                                                                 {"pred_deg_variance_R", pred_deg_variance_R_str},
-                                                                                {"init_cov", init_cov_str},
-                                                                                {"init_mean", init_mean_str}};
+                                                                                {"init_var_ELBO", init_var_ELBO_str},
+                                                                                {"init_mean_MAP", init_mean_MAP_str}};
     }
     // else if (method == "DELTA")
     // {
@@ -267,12 +267,6 @@ void KheperaIVDiffusionMotion::ControlStep()
 {
     ++tick_counter_;
 
-    // Evolve sensor degradation
-    if (ground_sensor_params_.IsSimulated && ground_sensor_params_.IsDynamic)
-    {
-        EvolveSensorDegradation();
-    }
-
     // Move robot
     SetWheelSpeedsFromVector(ComputeDiffusionVector());
 
@@ -350,6 +344,12 @@ void KheperaIVDiffusionMotion::ControlStep()
 
         // update sensor accuracies
         UpdateAssumedSensorAcc(sensor_degradation_filter_ptr_->GetAccuracyEstimates());
+    }
+
+    // Evolve sensor degradation
+    if (ground_sensor_params_.IsSimulated && ground_sensor_params_.IsDynamic)
+    {
+        EvolveSensorDegradation();
     }
 }
 

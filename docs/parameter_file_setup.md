@@ -41,9 +41,9 @@ The value `length * ticks_per_second` becomes the number of steps for a single t
 ### KheperaIV static degradation controller
 This is the controller that is used for experiments concerning static black-and-white tile environments. It is recommended that you use the absolute path for the controller library so that the execution location is flexible.
 
-Most of the controller parameter can be left as is. You may be mostly concerned with parameter values related to the filter under the `<static_degradation_filter />` node.
+Most of the controller parameter can be left as is. You may be mostly concerned with parameter values related to the filter under the `<sensor_degradation_filter />` node.
 ```xml
-<kheperaiv_static_deg_controller id="ksdc"
+<kheperaiv_diffusion_motion_controller id="kdmc"
             library="build/src/controllers/libsensor_degradation_filter_controllers">
     <actuators>
         <!-- Activate the differential steering actuator -->
@@ -73,14 +73,26 @@ Most of the controller parameter can be left as is. You may be mostly concerned 
         <diffusion go_straight_angle_range="-5:5" delta="0.1" />
 
         <!-- Ground sensor parameters -->
-        <!-- 
+        <!--
             period_ticks: how many ticks between each observation
             sensor_acc_b: actual sensor accuracy (black tile) to simulate (only applies if sim=true in the static_degeradation_filter node)
             sensor_acc_w: actual sensor accuracy (white tile) to simulate (only applies if sim=true in the static_degeradation_filter node)
+            sim: whether the experiment is using simulated or real ground sensors
+            dynamic: whether the sensor accuracy dynamically changes over time (according to a Wiener process)
+            true_deg_drift_coeff: drift coefficient of the sensor accuracy (applies only if dynamic="true")
+            true_deg_diffusion_coeff: diffusion coefficient of the sensor accuracy (applies only if dynamic="true")
         -->
         <!-- Note: both sensor_acc_b and sensor_acc_w are used to parametrize the assumed accuracy of non-flawed robots, so they must still be set
             to valid values even if sim=false -->
-        <ground_sensor period_ticks="1" sensor_acc_b="0.95" sensor_acc_w="0.95" />
+        <ground_sensor
+            period_ticks="1"
+            sensor_acc_b="0.99"
+            sensor_acc_w="0.99"
+            sim="true"
+            dynamic="true"
+            true_deg_drift_coeff="-5e-5"
+            true_deg_diffusion_coeff="1e-4"
+        />
 
         <!-- Communication period in ticks -->
         <comms period_ticks="10" />
@@ -92,16 +104,32 @@ Most of the controller parameter can be left as is. You may be mostly concerned 
             max_speed="10" /> <!-- speed in cm/s -->
 
         <!-- Static degradation filter parameters -->
-        <!-- 
-            sim: whether the experiment is using simulated or real ground sensors
-            method: filter type ("ALPHA" = no adaptive estimation of sensor accuracy, "BRAVO" = with adaptive estimation of sensor accuracy)
+        <!--
+            method: filter type ("ALPHA" = no adaptive estimation of static sensor accuracy, "BRAVO" = with adaptive estimation of static sensor accuracy, "CHARLIE" = estimation of dynamic sensor accuracy)
             period_ticks: how many ticks between each (nominal) activation of the filter
+            observation_queue_size: size of queue to store observations (to calculate variable n and t); set to 0 if not using queue (same effect as setting to 1 but more efficient)
         -->
-        <static_degradation_filter sim="true" method="ALPHA" period_ticks="1000">
-            <params type_2_err_prob="0.05" /> <!-- BRAVO-specific parameter for adaptive activation -->
-        </static_degradation_filter>
+        <sensor_degradation_filter method="ALPHA" period_ticks="1000" observation_queue_size="100">
+            <!-- BRAVO-specific parameter for adaptive activation; only used if method="BRAVO" -->
+            <!-- type_2_err_prob: type 2 error probability a.k.a. false negative rate -->
+            <params type_2_err_prob="0.05" />
+
+            <!-- CHARLIE-specific parameters for adaptive activation; only used if method="CHARLIER" -->
+            <!--
+                pred_deg_model_B: assumed drift coefficient used in prediction model
+                pred_deg_variance_R: assumed *squared* diffusion coefficient (i.e., variance) used in the prediction model
+                init_mean_MAP: initial guess for the surrogate distribution mean in the MAP estimation problem
+                init_var_ELBO: initial guess for the surrogate distribution variance in the ELBO optimization problem
+            -->
+            <params
+                pred_deg_model_B="-5e-5"
+                pred_deg_variance_R="1e-4"
+                init_mean_MAP="0.99"
+                init_var_ELBO="0.001"
+            />
+        </sensor_degradation_filter>
     </params>
-</kheperaiv_static_deg_controller>
+</kheperaiv_diffusion_motion_controller>
 ```
 
 ### Loop functions
@@ -109,38 +137,34 @@ Like the controller, it is recommended that you use the absolute path for the lo
 ```xml
 <loop_functions
         library="build/src/loop_functions/libsensor_degradation_filter_loop_functions"
-        label="static_deg_loop_functions">
+        label="sensor_deg_loop_functions">
 
-    <static_degradation>
+    <!-- Number of trials to repeat -->
+    <num_trials value="3" />
 
-        <!-- Number of trials to repeat -->
-        <num_trials value="3" />
+    <!-- Number of tiles for the arena in the x and y direction -->
+    <!-- NOTE: must have equal number of tile counts -->
+    <arena_tiles tile_count_x="500" tile_count_y="500" />
 
-        <!-- Number of tiles for the arena in the x and y direction -->
-        <!-- NOTE: must have equal number of tile counts -->
-        <arena_tiles tile_count_x="500" tile_count_y="500" />
+    <!-- Target fill ratio between 0.0 and 1.0 to generate in the arena -->
+    <target_fill_ratio value="0.75" />
 
-        <!-- Target fill ratio between 0.0 and 1.0 to generate in the arena -->
-        <target_fill_ratio value="0.75" />
+    <!-- Flawed robot parameters -->
+    <!--
+        num: number of flawed robots in the experiment
+        acc_b: assumed sensor accuracy (black tile) of flawed robots
+        acc_w: assumed sensor accuracy (white tile) of flawed robots
+        activate_filter_for_all: whether to activate the filter for all robots or just those that have a flawed accuracy initially
+    -->
+    <!-- Note: both acc_b and acc_w are for flawed robots only; the assumed accuracies of non-flawed robots are set by the
+        ground_sensor node in the controller node above -->
+    <flawed_robots num="1" acc_b="0.75" acc_w="0.75" activate_filter_for_all="true" />
 
-        <!-- Flawed robot parameters -->
-        <!--
-            num: number of flawed robots in the experiment
-            acc_b: assumed sensor accuracy (black tile) of flawed robots
-            acc_w: assumed sensor accuracy (white tile) of flawed robots
-            activate_filter_for_all: whether to activate the filter for all robots or just those that have a flawed accuracy initially
-        -->
-        <!-- Note: both acc_b and acc_w are for flawed robots only; the assumed accuracies of non-flawed robots are set by the 
-            ground_sensor node in the controller node above -->
-        <flawed_robots num="1" acc_b="0.75" acc_w="0.75" activate_filter_for_all="true" />
+    <!-- Folder to store the output JSON data -->
+    <path folder="data/temp" />
 
-        <!-- Folder to store the output JSON data -->
-        <path folder="data/temp" />
-
-        <!-- Verbosity level ("full", "none") -->
-        <verbosity level="full" /> <!-- "full", "none" -->
-
-    </static_degradation>
+    <!-- Verbosity level ("full", "none") -->
+    <verbosity level="full" /> <!-- "full", "none" -->
 
 </loop_functions>
 ```
@@ -180,7 +204,7 @@ The swarm density is modified indirectly through the positions of the 4 walls th
         <!-- Number of robots to be distributed -->
         <entity quantity="20" max_trials="100" base_num="0">
             <kheperaiv id="kiv" rab_data_size="50" rab_range="0.7">
-                <controller config="ksdc" />
+                <controller config="kdmc" />
             </kheperaiv>
         </entity>
 

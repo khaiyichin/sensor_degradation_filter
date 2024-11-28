@@ -1,6 +1,6 @@
-#include "loop_functions/StaticDegLoopFunctions.hpp"
+#include "loop_functions/SensorDegLoopFunctions.hpp"
 
-void StaticDegLoopFunctions::Init(TConfigurationNode &t_tree)
+void SensorDegLoopFunctions::Init(TConfigurationNode &t_tree)
 {
     // Extract XML information
     try
@@ -8,14 +8,11 @@ void StaticDegLoopFunctions::Init(TConfigurationNode &t_tree)
         // Call parent's Init
         CLoopFunctions::Init(t_tree);
 
-        // Grab the reference to the XML node with the tag "static_degradation"
-        TConfigurationNode &static_deg_node = GetNode(t_tree, "static_degradation");
-
         // Grab arena information
-        TConfigurationNode &arena_tiles_node = GetNode(static_deg_node, "arena_tiles");
+        TConfigurationNode &arena_tiles_node = GetNode(t_tree, "arena_tiles");
 
         // Grab verbosity level
-        GetNodeAttribute(GetNode(static_deg_node, "verbosity"), "level", verbose_level_);
+        GetNodeAttribute(GetNode(t_tree, "verbosity"), "level", verbose_level_);
 
         // Get a pointer to the ARGoS floor entity (method provided by superclass)
         space_ptr_ = &GetSpace();
@@ -82,10 +79,10 @@ void StaticDegLoopFunctions::Init(TConfigurationNode &t_tree)
         Real constrained_area = constrained_x_distance * constrained_y_distance;
 
         // Grab number of trials
-        GetNodeAttribute(GetNode(static_deg_node, "num_trials"), "value", exp_params_.NumTrials);
+        GetNodeAttribute(GetNode(t_tree, "num_trials"), "value", exp_params_.NumTrials);
 
         // Grab target fill ratio
-        GetNodeAttribute(GetNode(static_deg_node, "target_fill_ratio"), "value", exp_params_.TargetFillRatio);
+        GetNodeAttribute(GetNode(t_tree, "target_fill_ratio"), "value", exp_params_.TargetFillRatio);
 
         // Grab random KheperaIV static degradation controller
         auto &kheperaiv_entities_map = space_ptr_->GetEntitiesByType("kheperaiv");
@@ -95,7 +92,7 @@ void StaticDegLoopFunctions::Init(TConfigurationNode &t_tree)
         // Grab sensor accuracies
         exp_params_.ActualSensorAcc = diffusion_controller.GetGroundSensorParams().ActualSensorAcc;
 
-        TConfigurationNode &flawed_robots_node = GetNode(static_deg_node, "flawed_robots");
+        TConfigurationNode &flawed_robots_node = GetNode(t_tree, "flawed_robots");
         GetNodeAttribute(flawed_robots_node, "num", exp_params_.NumFlawedRobots);
         GetNodeAttribute(flawed_robots_node, "acc_b", exp_params_.AssumedSensorAcc.at("b"));
         GetNodeAttribute(flawed_robots_node, "acc_w", exp_params_.AssumedSensorAcc.at("w"));
@@ -168,7 +165,7 @@ void StaticDegLoopFunctions::Init(TConfigurationNode &t_tree)
         }
 
         // Grab save path
-        GetNodeAttribute(GetNode(static_deg_node, "path"), "folder", exp_params_.SaveFolder);
+        GetNodeAttribute(GetNode(t_tree, "path"), "folder", exp_params_.SaveFolder);
 
         // Check if folder exists
         if (!std::filesystem::exists(exp_params_.SaveFolder))
@@ -244,7 +241,7 @@ void StaticDegLoopFunctions::Init(TConfigurationNode &t_tree)
     SetupExperiment();
 }
 
-void StaticDegLoopFunctions::Reset()
+void SensorDegLoopFunctions::Reset()
 {
     if (exp_params_.DistributeRobotPlacement)
     {
@@ -254,7 +251,7 @@ void StaticDegLoopFunctions::Reset()
     SetupExperiment();
 }
 
-void StaticDegLoopFunctions::SetupExperiment()
+void SensorDegLoopFunctions::SetupExperiment()
 {
     // Create new Arena object
     arena_ = Arena(arena_tile_count_, arena_lower_lim_, arena_tile_size_, exp_params_.TargetFillRatio, GetSimulator().GetRandomSeed());
@@ -278,7 +275,7 @@ void StaticDegLoopFunctions::SetupExperiment()
     }
 }
 
-void StaticDegLoopFunctions::PostStep()
+void SensorDegLoopFunctions::PostStep()
 {
     // Grab data from each robot
     for (size_t i = 0; i < exp_params_.NumRobots; ++i)
@@ -292,7 +289,7 @@ void StaticDegLoopFunctions::PostStep()
     }
 }
 
-void StaticDegLoopFunctions::PostExperiment()
+void SensorDegLoopFunctions::PostExperiment()
 {
     // Store new trial result
     std::vector<std::vector<std::string>> vec;
@@ -329,7 +326,7 @@ void StaticDegLoopFunctions::PostExperiment()
     }
 }
 
-void StaticDegLoopFunctions::SaveData()
+void SensorDegLoopFunctions::SaveData()
 {
     // Write JSON files into folder
     std::string filepath_prefix = exp_params_.SaveFolder + "/";
@@ -351,7 +348,7 @@ void StaticDegLoopFunctions::SaveData()
     }
 }
 
-void StaticDegLoopFunctions::InitializeJSON()
+void SensorDegLoopFunctions::InitializeJSON()
 {
     curr_json_ = ordered_json{};
     curr_json_["sim_type"] = "dynamic_topo_static_deg_1d";
@@ -390,14 +387,14 @@ void StaticDegLoopFunctions::InitializeJSON()
     curr_json_["trial_ind"] = curr_trial_ind_;
 }
 
-CColor StaticDegLoopFunctions::GetFloorColor(const CVector2 &c_position_on_plane)
+CColor SensorDegLoopFunctions::GetFloorColor(const CVector2 &c_position_on_plane)
 {
     UInt32 color_int = arena_.GetColor(c_position_on_plane.GetX(), c_position_on_plane.GetY());
 
     return color_int == 1 ? CColor::BLACK : CColor::WHITE;
 }
 
-std::string StaticDegLoopFunctions::ConvertDataToString(const std::vector<Real> &data)
+std::string SensorDegLoopFunctions::ConvertDataToString(const std::vector<Real> &data)
 {
     /*
         The data is in the form:
@@ -436,7 +433,7 @@ std::string StaticDegLoopFunctions::ConvertDataToString(const std::vector<Real> 
     return ss.str().substr(0, ss.str().size() - 1); // return without the last comma
 }
 
-void StaticDegLoopFunctions::ResetRobotPositions()
+void SensorDegLoopFunctions::ResetRobotPositions()
 {
     bool done_placing, retry_placing;
     UInt64 placement_trials;
@@ -480,4 +477,4 @@ void StaticDegLoopFunctions::ResetRobotPositions()
     }
 }
 
-REGISTER_LOOP_FUNCTIONS(StaticDegLoopFunctions, "static_deg_loop_functions")
+REGISTER_LOOP_FUNCTIONS(SensorDegLoopFunctions, "sensor_deg_loop_functions")

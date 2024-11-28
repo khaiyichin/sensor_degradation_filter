@@ -62,8 +62,8 @@ void DynamicDegradationFilterCharlie::Init()
     ELBO_optimizer_.set_xtol_abs(1e-9);
 
     // Initialize the prior (initial guess)
-    initial_mean_ = std::stod(params_ptr_->FilterSpecificParams["init_mean"]);
-    initial_cov_ = std::stod(params_ptr_->FilterSpecificParams["init_cov"]);
+    initial_mean_ = std::stod(params_ptr_->FilterSpecificParams["init_mean_MAP"]);
+    initial_cov_ = std::stod(params_ptr_->FilterSpecificParams["init_var_ELBO"]);
 
     MAP_outcome_.first.push_back(initial_mean_);
     ELBO_outcome_.first.push_back(initial_cov_);
