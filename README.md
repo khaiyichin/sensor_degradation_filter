@@ -21,9 +21,10 @@ The robots in the dynamic topology simulator move around a square arena of black
 ## Requirements
 - Python 3.8+, `pip`, and `python3-venv` - _the code here was tested on Python 3.8 (Ubuntu 20.04) and Python 3.12 (Ubuntu 24.04)_
 - CMake 3.15+
-- [ARGoS3](https://github.com/ilpincy/argos3.git)
-- [ARGoS3-KheperaIV plugin](https://github.com/ilpincy/argos3-kheperaiv)
+- [ARGoS3](https://github.com/ilpincy/argos3.git) - _recommended to be built from source_
+- [ARGoS3-KheperaIV plugin](https://github.com/ilpincy/argos3-kheperaiv) - _can only be built from source_
 - [GSL 2.5+](https://www.gnu.org/software/gsl/) - _can be installed using `apt install libgsl-dev` or built from source_
+- [NLopt 2.9.0+](https://github.com/stevengj/nlopt) - _can only be built from source_
 
 ## Installation
 First, ensure that all requirements are satisfied and clone this repository. Then run the subsequent commands in the project root directory.

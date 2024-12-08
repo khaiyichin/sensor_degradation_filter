@@ -21,21 +21,23 @@ using RobotIdDataStrMap = std::unordered_map<std::string, std::vector<std::strin
 
 struct ExperimentParams
 {
-    UInt32 NumRobots;
+    UInt32 NumRobots = 0;
 
-    UInt32 NumFlawedRobots;
+    UInt32 NumFlawedRobots = 0;
 
-    UInt32 NumTrials;
+    UInt32 NumTrials = 0;
 
-    UInt32 CommsPeriod;
+    UInt32 CommsPeriod = 0;
 
-    UInt32 MeasurementPeriod;
+    UInt32 MeasurementPeriod = 0;
 
-    UInt32 FilterPeriod;
+    UInt32 FilterPeriod = 0;
 
     UInt32 ObservationQueueSize = 0;
 
-    UInt64 NumSteps;
+    UInt64 NumSteps = 0;
+
+    UInt32 MaxPlacementTrials = 0;
 
     std::unordered_map<std::string, std::string> FilterSpecificParams;
 
@@ -43,29 +45,27 @@ struct ExperimentParams
 
     std::unordered_map<std::string, Real> AssumedSensorAcc = {{"b", -1.0}, {"w", -1.0}};
 
-    Real CommsRange;
+    Real CommsRange = -1.0;
 
-    Real RobotSpeed;
+    Real RobotSpeed = -1.0;
 
-    Real Density;
+    Real Density = -1.0;
 
-    Real TargetFillRatio;
+    Real TargetFillRatio = -1.0;
 
-    Real GroundSensorDriftCoeff;
+    Real GroundSensorDriftCoeff = -1.0;
 
-    Real GroundSensorDiffusionCoeff;
-
-    UInt32 MaxPlacementTrials;
+    Real GroundSensorDiffusionCoeff = -1.0;
 
     bool DistributeRobotPlacement = false;
 
-    bool FilterActiveForAll;
+    bool FilterActiveForAll = false;
 
-    bool DynamicDegradation;
+    bool DynamicDegradation = false;
 
-    std::string FilterMethod;
+    std::string FilterMethod = "Unset";
 
-    std::string SaveFolder;
+    std::string SaveFolder = "Unset";
 
     std::shared_ptr<RealNumberGenerator> PositionPlacementGeneratorPtr;
 
@@ -161,13 +161,13 @@ private:
 
     ExperimentParams exp_params_; ///< Struct of experiment parameters
 
-    Real arena_tile_size_; ///< Size of arena (square) tiles
+    Real arena_tile_size_ = -1.0; ///< Size of arena (square) tiles
 
-    Real ticks_per_sec_; ///< Number of ticks in one second
+    Real ticks_per_sec_ = -1.0; ///< Number of ticks in one second
 
-    std::pair<UInt64, UInt64> arena_tile_count_; ///< Number of arena tiles
+    std::pair<UInt64, UInt64> arena_tile_count_ = {0, 0}; ///< Number of arena tiles
 
-    std::pair<Real, Real> arena_lower_lim_; ///< Bottom left corner coordinate of the arena
+    std::pair<Real, Real> arena_lower_lim_ = {-1.0, -1.0}; ///< Bottom left corner coordinate of the arena
 
     Arena arena_; ///< Arena object
 
@@ -175,9 +175,9 @@ private:
 
     CSpace *space_ptr_ = NULL; ///< Pointer to the space class
 
-    std::string verbose_level_; ///< Output verbosity level
+    std::string verbose_level_ = "Unset"; ///< Output verbosity level
 
-    std::string output_filename_; ///< Filename of output data
+    std::string output_filename_ = "Unset"; ///< Filename of output data
 
     ordered_json curr_json_; ///< Current JSON data object
 

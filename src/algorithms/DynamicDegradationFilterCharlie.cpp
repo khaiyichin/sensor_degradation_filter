@@ -65,8 +65,8 @@ void DynamicDegradationFilterCharlie::Init()
     initial_mean_ = std::stod(params_ptr_->FilterSpecificParams["init_mean_MAP"]);
     initial_cov_ = std::stod(params_ptr_->FilterSpecificParams["init_var_ELBO"]);
 
-    MAP_outcome_.first.push_back(initial_mean_);
-    ELBO_outcome_.first.push_back(initial_cov_);
+    MAP_outcome_.first[0] = initial_mean_;
+    ELBO_outcome_.first[0] = initial_cov_;
 
     // Extract the prediction model parameters
     model_b_ = std::stod(params_ptr_->FilterSpecificParams["pred_deg_model_B"].c_str());

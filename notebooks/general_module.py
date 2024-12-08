@@ -4,9 +4,9 @@ import scipy.stats._multivariate as multivar
 import matplotlib.pyplot as plt
 import itertools as itt
 import time
-from numba import jit, njit
+from collections import deque
 
-ZERO_APPROX = 1e-3
+ZERO_APPROX = 1e-9
 
 # Class to store a single estimate
 class Estimate:
@@ -25,10 +25,19 @@ class Estimate:
 
 # Class to store a single observation
 class Observation:
-    def __init__(self, n, t):
-        self.n = n
-        self.t = t
-        self.complement = t - n
+    def __init__(self, n, t, use_queue=False, queue_size=10):
+        if use_queue:
+            self.obs_queue = deque(maxlen=queue_size)
+            self.queue_size = queue_size
+        else:
+            self.n = n
+            self.t = t
+            self.complement = t - n
+
+    def update_obs_from_queue(self):
+        self.n = sum(self.obs_queue)
+        self.t = min(len(self.obs_queue), self.queue_size)
+        self.complement = self.t - self.n
 
     def tolist(self):
         return [self.n, self.t]

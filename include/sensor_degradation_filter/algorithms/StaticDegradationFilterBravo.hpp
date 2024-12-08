@@ -24,7 +24,7 @@ protected:
      */
     bool CompareWithNeighborEstimates();
 
-    double type_2_err_prob_; ///< Parameter to adjust the width of the confidence interval
+    double type_2_err_prob_ = -1.0; ///< Parameter to adjust the width of the confidence interval
 };
 
 #endif

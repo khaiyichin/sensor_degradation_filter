@@ -70,7 +70,7 @@ public:
     {
         bool IsSimulated = true;
         bool IsDynamic = false;
-        UInt32 GroundMeasurementPeriodTicks;
+        UInt32 GroundMeasurementPeriodTicks = 0;
         std::unordered_map<std::string, Real> ActualSensorAcc = {{"b", -1.0}, {"w", -1.0}};
         std::unordered_map<std::string, Real> InitialActualAcc = {{"b", -1.0}, {"w", -1.0}};
         std::unordered_map<std::string, Real> DegradationCoefficients = {{"drift", 0.0}, {"diffusion", -1.0}};
@@ -78,8 +78,8 @@ public:
 
     struct CommsParams
     {
-        UInt32 CommsPeriodTicks;
-        size_t RABDataSize;
+        UInt32 CommsPeriodTicks = 0;
+        size_t RABDataSize = 0;
     };
 
 public:

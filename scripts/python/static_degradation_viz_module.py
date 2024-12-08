@@ -178,7 +178,9 @@ DATA_KEYWORD_TO_DATA_COLUMN_INDEX_DICT = {
     "social_confidence": 6,
     "informed_estimate": 7,
     "assumed_accuracy_b": 8,
-    "assumed_accuracy_w": 9
+    "assumed_accuracy_w": 9,
+    "true_accuracy_b": 10,
+    "true_accuracy_w": 11
 }
 
 class StaticDegradationJsonDataSpecific(StaticDegradationJsonData):
@@ -194,8 +196,10 @@ class StaticDegradationJsonDataSpecific(StaticDegradationJsonData):
         "social_estimate",
         "social_confidence",
         "informed_estimate",
-        "assumed_accuracy_b", and
-        "assumed_accuracy_w".
+        "assumed_accuracy_b",
+        "assumed_accuracy_w",
+        "true_accuracy_b", and
+        "true_accuracy_w".
     """
 
     def __init__(self, data_folder: str, data_keyword: str, silent=True):

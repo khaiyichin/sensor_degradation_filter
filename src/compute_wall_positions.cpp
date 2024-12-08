@@ -7,7 +7,7 @@
 #include <unistd.h> // getopt()
 #include <libgen.h> // basename()
 
-#define DEFAULT_CONTROLLER_ID "ksdc"
+#define DEFAULT_CONTROLLER_ID "kdmc"
 #define DEFAULT_THICKNESS 0.1
 #define DEFAULT_HEIGHT 0.5
 
@@ -109,7 +109,7 @@ std::string GenerateArgosXMLOutput(const int &robots,
         "\n\t<distribute> "
         "\n\t    <position method=\"uniform\" min=\"" +
         dist_pos_min_str + "\" max=\"" + dist_pos_max_str + "\" />" +
-        "\n\t    <orientation method=\"uniform\" min=\"0, 0, 0\" max=\"0, 0, 0\" />" +
+        "\n\t    <orientation method=\"uniform\" min=\"0, 0, 0\" max=\"360, 0, 0\" />" +
         "\n\t    <entity quantity=\"" + std::to_string(robots) + "\" max_trials=\"100\" base_num=\"0\">" +
         "\n\t        <kheperaiv id=\"kiv\" rab_data_size=\"50\" rab_range=\"" + std::to_string(comms_rad) + "\">" +
         "\n\t            <controller config=\"" + controller_id + "\" />" +
@@ -147,7 +147,7 @@ int main(int argc, char **argv)
 
     std::cin.ignore(); // clear newline character from the buffer to allow std::getline to work properly
 
-    std::cout << "Please specify the controller config ID (default = \"ksdc\"): ";
+    std::cout << "Please specify the controller config ID (default = \"kdmc\"): ";
     std::getline(std::cin, controller_id);
     controller_id = controller_id.empty() ? DEFAULT_CONTROLLER_ID : controller_id;
 

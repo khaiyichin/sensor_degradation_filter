@@ -55,21 +55,21 @@ private:
 
     ELBO elbo_;
 
-    std::pair<std::vector<double>, double> MAP_outcome_;
+    std::pair<std::vector<double>, double> MAP_outcome_ = {{-1.0}, -1.0};
 
-    std::pair<std::vector<double>, double> ELBO_outcome_;
+    std::pair<std::vector<double>, double> ELBO_outcome_ = {{-1.0}, -1.0};
 
     std::deque<double> informed_estimate_history_;
 
-    size_t max_informed_estimate_history_length_;
+    size_t max_informed_estimate_history_length_ = 0;
 
-    double model_b_; // our model of what the drift coefficient is
+    double model_b_ = 0.0; // our model of what the drift coefficient is (default: no drift)
 
-    double variance_r_; // our model of what the diffusion coefficient is
+    double variance_r_ = -1.0; // our model of what the diffusion coefficient is (default: invalid value; requires setting)
 
-    double initial_mean_;
+    double initial_mean_ = -1.0; // initial guess for the MAP estimate (default: invalid value; requires setting)
 
-    double initial_cov_;
+    double initial_cov_ = -1.0; // initial guess for the ELBO estimate (default: invalid value: requires setting)
 };
 
 #endif

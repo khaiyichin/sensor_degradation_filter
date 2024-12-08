@@ -20,8 +20,7 @@ except:
                             
 import numpy as np
 from scipy import integrate, optimize, stats
-from numba import jit, njit
-from numba_stats import norm, truncnorm
+from numba import jit
 
 # Wrap the minimize with a timer function
 timed_minimize = timing_decorator(optimize.minimize)
@@ -53,13 +52,13 @@ class SensorFilter1D:
         def p(self, x):
             return x * self.f + (1 - x) * (1 - self.f)
 
-        def update_norm_params(self, mu, covar):
+        def update_norm_params(self, mu, sigma_sq):
             self.mu = float(mu)
-            self.covar = float(covar)
+            self.sigma_sq = float(sigma_sq)
 
         def normalize(self):
             self.norm_const, _ = integrate.quad(
-                lambda x: self.pdf(x), 0.5+ZERO_APPROX, 1-ZERO_APPROX
+                lambda x: self.pdf(x), 0.5, 1.0
             )
 
         def pdf(self, x):
@@ -76,51 +75,86 @@ class SensorFilter1D:
                 y = np.asarray([*map(float, x)])
             else:
                 y = float(x)
+
+            # Compute truncated normal truncation points
+            a, b = (0.5 - self.mu) / np.sqrt(self.sigma_sq), (1.0 - self.mu) / np.sqrt(self.sigma_sq)
+
             return np.log(
                 stats.binom.pmf(self.n, self.t, self.p(y))
             ) + np.log(
-                truncnorm.pdf(y, 0.5+ZERO_APPROX, 1-ZERO_APPROX, self.mu, self.covar)
+                stats.truncnorm.pdf(y, a, b, loc=self.mu, scale=np.sqrt(self.sigma_sq))
+            )
+
+        def logpdf_binom(self, x):
+            if type(x) == np.ndarray and len(x) > 1:
+                y = np.asarray([*map(float, x)])
+            else:
+                y = float(x)
+            return np.log(
+                stats.binom.pmf(self.n, self.t, self.p(y))
+            )
+
+        def logpdf_truncnorm(self,x):
+            if type(x) == np.ndarray and len(x) > 1:
+                y = np.asarray([*map(float, x)])
+            else:
+                y = float(x)
+
+            # Compute truncated normal truncation points
+            a, b = (0.5 - self.mu) / np.sqrt(self.sigma_sq), (1.0 - self.mu) / np.sqrt(self.sigma_sq)
+
+            return np.log(
+                stats.truncnorm.pdf(y, a, b, loc=self.mu, scale=np.sqrt(self.sigma_sq))
             )
 
     class TruncatedNormal1D:
         """Internal 1-D truncated normal distribution.
         """
-        def __init__(self, mu=0, sigma=1, limit=[0.5+ZERO_APPROX, 1-ZERO_APPROX]):
+        def __init__(self, mu=0, sigma_sq=1, limit=[0.5, 1.0]):
             self.mean = float(mu)
-            self.covar = float(sigma)
+            self.covar = float(sigma_sq)
             self.truncated_norm_const = 0
             self.limit = [*map(float, limit)]
 
-        def update_params(self, mu, sigma):
+        def update_params(self, mu, sigma_sq):
             self.mean = float(mu)
-            self.covar = float(sigma)
+            self.covar = float(sigma_sq)
 
         def pdf(self, x, normalized=True):
             if type(x) == np.ndarray and len(x) > 1:
                 y = np.asarray([*map(float, x)])
             else:
                 y = float(x)
-            return truncnorm.pdf(
-                y, self.limit[0], self.limit[1], self.mean, self.covar
-            ) if normalized else norm.pdf(
-                y, self.mean, self.covar
+
+            # Compute truncated normal truncation points
+            a, b = (0.5 - self.mean) / np.sqrt(self.covar), (1.0 - self.mean) / np.sqrt(self.covar)
+
+            return stats.truncnorm.pdf(
+                y, a, b, loc=self.mean, scale=np.sqrt(self.covar)
+            ) if normalized else stats.norm.pdf(
+                y, self.mean, np.sqrt(self.covar)
             )
 
 
     def __init__(self,
                  a: float,
+                 b: float,
                  r: float,
-                 limit = [0.5+ZERO_APPROX, 1-ZERO_APPROX]
+                 limit = [0.5+ZERO_APPROX, 1.0-ZERO_APPROX] # the sensor accuracies cannot be exactly 1.0 or 0.5 for numerical reasons
         ):
 
         self.act_joint_dist = self.MultiVarJointDist1D()
-        self.est_posterior = self.TruncatedNormal1D(mu=0.5+ZERO_APPROX, sigma=1)
+        self.est_posterior = self.TruncatedNormal1D(mu=0.5, sigma_sq=1)
         self.a = a
+        self.b = b
         self.r = r
         self.limit = limit
 
     def degrade_quality(self, sensor_quality):
-        return self.a * sensor_quality
+        sensor_acc = stats.norm.rvs(loc=self.a * sensor_quality[0] + self.b, scale=np.sqrt(self.r))
+        if sensor_acc <= 0.5: sensor_acc = self.limit[0]
+        elif sensor_acc >= 1.0: sensor_acc = self.limit[1]
+        return np.asarray([[sensor_acc], [sensor_acc]])
 
     def neg_joint_dist_pdf(self, x):
         return -self.act_joint_dist.pdf(x)
@@ -154,8 +188,6 @@ class SensorFilter1D:
 
         grad_term = lambda x: inv_variance**2 * (x-mu)**2
 
-        # Note: surr_dist is already normalized, thanks to the numba_stats.truncnorm
-
         factor = lambda x: np.log(self.act_joint_dist.pdf(x)/surr_dist.pdf(x)) - 1
         term_1 = grad_term
         term_2 = -integrate.quad(
@@ -170,17 +202,15 @@ class SensorFilter1D:
 
     def _predict(self, est: Estimate, elapsed_duration):
         a = self.a ** elapsed_duration
-        return Estimate(a * est.x, a**2 * est.covar + self.r)
+        b = self.b * elapsed_duration
+        r = self.r * elapsed_duration
+        return Estimate(a * est.x + b, a**2 * est.covar + r)
 
     def _update(self, prediction: Estimate, obs: Observation, past_f):
 
         # Update joint distribution values
         self.act_joint_dist.update_binom_params(obs.n, past_f, obs.t)
         self.act_joint_dist.update_norm_params(prediction.x, prediction.covar)
-        self.act_joint_dist.normalize()
-
-        print("debug n", self.act_joint_dist.n)
-        print("debug ACTUAL mu covar", self.act_joint_dist.mu, self.act_joint_dist.covar)
 
         # Find MAP estimate for the mean
         updated_mean_result = optimize.minimize(
@@ -194,26 +224,36 @@ class SensorFilter1D:
 
         if not updated_mean_result.success:
             print(updated_mean_result)
+            print("limit={0}".format(self.limit))
+            print("obs n={0}, t={1}, past_f={2}, prediction.x={3}, prediction.covar={4}".format(obs.n, obs.t, past_f, prediction.x, prediction.covar))
+            print("joint dist n={0}, t={1}, f={2}, mean={3}, covar={4}".format(self.act_joint_dist.n, self.act_joint_dist.t, self.act_joint_dist.f, self.act_joint_dist.mu, self.act_joint_dist.sigma_sq))
             raise RuntimeWarning("MAP estimation is unsuccessful")
 
         # Find the variance
         surrogate_dist = self.TruncatedNormal1D(self.est_posterior.mean, self.est_posterior.covar)
 
-        updated_var_result = timed_minimize(
+        # updated_var_result = timed_minimize(
+        updated_var_result = optimize.minimize(
             self.neg_ELBO,
+            # self.neg_ELBO_manual,
             prediction.covar,
-            jac=self.grad_neg_ELBO,
+            # jac=self.grad_neg_ELBO,
             args=(surrogate_dist, updated_mean_result.x),
             method="SLSQP",
             bounds=[(ZERO_APPROX, np.inf)]
         )
 
         if not updated_var_result.success:
-            print(updated_mean_result)
-            print(updated_var_result)
-            print(RuntimeWarning("Variance estimation is unsuccessful"))
+            print("##### Variance estimation is unsuccessful #####")
+            print("limits:", self.limit)
+            print("prediction.x", prediction.x)
+            print("prediction.covar", prediction.covar)
+            print("updated_mean_result:\n",updated_mean_result)
+            print("updated_var_result:\n", updated_var_result)
+            print("surrogate mean={0}, covar={1}, truncated_norm_const={2}, limit={3}".format(surrogate_dist.mean,surrogate_dist.covar,surrogate_dist.truncated_norm_const,surrogate_dist.limit))
+            print("joint dist n={0}, t={1}, f={2}, mean={3}, covar={4}".format(self.act_joint_dist.n, self.act_joint_dist.t, self.act_joint_dist.f, self.act_joint_dist.mu, self.act_joint_dist.sigma_sq))
+            print("##### ##### #####")
 
-        print("debug SURROGATE mu covar", updated_mean_result.x, updated_var_result.x)
         self.est_posterior.mean = surrogate_dist.mean
         self.est_posterior.covar = surrogate_dist.covar
 
@@ -247,7 +287,7 @@ class SensorFilter1DAlpha:
 
     def __init__(
             self,
-            limit = [0.5+ZERO_APPROX, 1-ZERO_APPROX]
+            limit
         ):
         self.limit = limit
 
@@ -280,12 +320,13 @@ class SensorFilter1DAlpha:
         return output
 
 class SensorFilter2D:
+    # @todo: need to implement B matrix
 
     def __init__(self,
                  A: np.ndarray,
                  R: np.ndarray,
-                 limit_x = [ZERO_APPROX, 1-ZERO_APPROX],
-                 limit_y = [ZERO_APPROX, 1-ZERO_APPROX]
+                 limit_x = [ZERO_APPROX, 1.0],
+                 limit_y = [ZERO_APPROX, 1.0]
         ):
 
         self.act_joint_dist = MultiVarJointDist(dim=2)
@@ -297,6 +338,7 @@ class SensorFilter2D:
 
     def degrade_quality(self, sensor_quality):
         return self.A @ sensor_quality
+        # return stats.norm.rvs(loc=self.A @ sensor_quality + self.B, scale=self.R) # not tested
 
     def neg_joint_dist_pdf(self, x):
         """Negated density value of the joint density.
@@ -580,15 +622,18 @@ class Robot(MinimalisticCollectivePerception):
 
     def __init__(self,
                  A,
+                 B,
                  R,
                  act_sensor_quality: np.ndarray,
                  est_sensor_quality_init: np.ndarray,
-                 est_sensor_quality_cov_init: np.ndarray):
+                 est_sensor_quality_cov_init: np.ndarray,
+                 use_obs_queue=False,
+                 obs_queue_size=10):
         
         if type(A) == np.ndarray and A.size == 2:
-            self.sensor_filter = SensorFilter2D(A, R)
+            self.sensor_filter = SensorFilter2D(A, R) # @todo: implement usage of B matrix
         elif type(A) == float or type(A) == int:
-            self.sensor_filter = SensorFilter1D(A, R)
+            self.sensor_filter = SensorFilter1D(A, B, R)
         self.min_cp_solver = MinimalisticCollectivePerception()
         self.act_sensor_quality = act_sensor_quality # [[sensor_b], [sensor_w]]
         self.est_sensor_quality = Estimate(est_sensor_quality_init, est_sensor_quality_cov_init)
@@ -598,19 +643,32 @@ class Robot(MinimalisticCollectivePerception):
         self.x_bar = 0.5
         self.beta = 0
         self.x = 0.5
-        self.obs = Observation(0, 0)
+        self.use_obs_queue = use_obs_queue
+        self.obs = Observation(0, 0, use_queue=use_obs_queue, queue_size=obs_queue_size if self.use_obs_queue else 0)
 
     def evolve_sensor_degradation(self):
         self.act_sensor_quality = self.sensor_filter.degrade_quality(self.act_sensor_quality)
 
     def compute_local_estimate(self, occurrence: int):
-        self.obs.n += super().make_observation(
-            occurrence,
-            self.act_sensor_quality[0,0], # observe with actual sensor qualitiy
-            self.act_sensor_quality[1,0]
-        )
-        self.obs.t += 1
-        self.obs.complement = self.obs.t - self.obs.n
+
+        observation = super().make_observation(
+                occurrence,
+                self.act_sensor_quality[0,0], # observe with actual sensor qualitiy
+                self.act_sensor_quality[1,0]
+            )
+
+        if self.use_obs_queue:
+            self.obs.obs_queue.append(observation)
+            self.obs.update_obs_from_queue()
+            self.obs.complement = self.obs.t - self.obs.n
+        else:
+            self.obs.n += super().make_observation(
+                occurrence,
+                self.act_sensor_quality[0,0], # observe with actual sensor qualitiy
+                self.act_sensor_quality[1,0]
+            )
+            self.obs.t += 1
+            self.obs.complement = self.obs.t - self.obs.n
 
         self.x_hat, self.alpha = super().local_estimate(
             self.obs,
@@ -719,6 +777,6 @@ class RobotStaticDegradation(Robot):
 
         score = stats.t.isf((1-self.type_2_err_prob) / 2, df=self.num_neighbors)
 
-        lower_bound = self.x_hat - self.x_sample_std * (score / np.sqrt(self.num_neighbors) + 1.0)
-        upper_bound = self.x_hat + self.x_sample_std * (score / np.sqrt(self.num_neighbors) + 1.0)
-        return False if (self.x_sample_mean > lower_bound and self.x_sample_mean < upper_bound) else True
+        # Compute one-sided interval
+        one_sided_interval = self.x_sample_std * (score / np.sqrt(self.num_neighbors) + 1.0)
+        return False if abs(self.x_sample_mean - self.x_hat) < one_sided_interval else True

@@ -19,7 +19,7 @@ public:
 
         bool RunDegradationFilter = false;
 
-        unsigned int FilterActivationPeriodTicks;
+        unsigned int FilterActivationPeriodTicks = 0;
 
         std::unordered_map<std::string, std::string> FilterSpecificParams;
 
