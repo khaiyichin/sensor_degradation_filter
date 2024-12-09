@@ -9,14 +9,14 @@
  */
 double surrogate_trunc_normal_pdf(double x, void *params)
 {
-    DistributionParameters *dist_params = static_cast<DistributionParameters *>(params);
+    SensorAccuracyDistributionParameters *dist_params = static_cast<SensorAccuracyDistributionParameters *>(params);
 
     // Compute the normalization constant
-    double std_dev = std::sqrt(dist_params->SurrogateVariance);
+    double std_dev = dist_params->SurrogateScale;
 
-    double norm_const = std_dev * (gsl_cdf_ugaussian_P((dist_params->SurrogateUpperBound - dist_params->SurrogateMean) / std_dev) - gsl_cdf_ugaussian_P((dist_params->SurrogateLowerBound - dist_params->SurrogateMean) / std_dev));
+    double norm_const = std_dev * (gsl_cdf_ugaussian_P((dist_params->SurrogateUpperBound - dist_params->SurrogateLoc) / std_dev) - gsl_cdf_ugaussian_P((dist_params->SurrogateLowerBound - dist_params->SurrogateLoc) / std_dev));
 
-    return gsl_ran_ugaussian_pdf((x - dist_params->SurrogateMean) / std::sqrt(dist_params->SurrogateVariance)) / norm_const;
+    return gsl_ran_ugaussian_pdf((x - dist_params->SurrogateLoc) / dist_params->SurrogateScale) / norm_const;
 }
 
 /**
@@ -28,9 +28,9 @@ double surrogate_trunc_normal_pdf(double x, void *params)
  */
 double prediction_trunc_normal_pdf(double x, void *params)
 {
-    DistributionParameters *dist_params = static_cast<DistributionParameters *>(params);
+    SensorAccuracyDistributionParameters *dist_params = static_cast<SensorAccuracyDistributionParameters *>(params);
 
-    return gsl_ran_ugaussian_pdf((x - dist_params->PredictionMean) / std::sqrt(dist_params->PredictionVariance)) / dist_params->PredictionNormConst;
+    return gsl_ran_ugaussian_pdf((x - dist_params->PredictionMean) / dist_params->PredictionStdDev) / dist_params->PredictionNormConst;
 }
 
 /**
@@ -42,10 +42,10 @@ double prediction_trunc_normal_pdf(double x, void *params)
  */
 double observation_likelihood_binomial_pdf(double x, void *params)
 {
-    DistributionParameters *dist_params = static_cast<DistributionParameters *>(params);
+    SensorAccuracyDistributionParameters *dist_params = static_cast<SensorAccuracyDistributionParameters *>(params);
 
     // Compute success probability (black tile observation probability)
-    double success_probability = x * dist_params->FillRatio + (1 - x) * (1 - dist_params->FillRatio);
+    double success_probability = x / dist_params->SensorAccuracyInternalFactor * dist_params->FillRatio + (1 - x / dist_params->SensorAccuracyInternalFactor) * (1 - dist_params->FillRatio);
 
     return gsl_ran_binomial_pdf(dist_params->NumBlackTilesSeen, success_probability, dist_params->NumObservations);
 }
@@ -75,35 +75,38 @@ double ELBO_integrand(double x, void *params)
     return surrogate_trunc_normal_pdf(x, params) * std::log(joint_density_fcn(x, params) / surrogate_trunc_normal_pdf(x, params));
 }
 
-ELBO::ELBO(double a, double b, size_t n /* 1000 */)
+SensorAccuracyELBO::SensorAccuracyELBO(double a, double b, double internal_units_factor /* 1.0 */, size_t n /* 1000 */)
     : workspace_size_(n),
-      integration_parameters_ptr_(std::make_shared<DistributionParameters>()),
-      integration_limits_(a, b)
+      integration_parameters_ptr_(std::make_shared<SensorAccuracyDistributionParameters>()),
+      integration_limits_(a * internal_units_factor, b * internal_units_factor)
 {
     workspace_ = gsl_integration_workspace_alloc(workspace_size_);
     integrand_.function = &ELBO_integrand;
     integrand_.params = integration_parameters_ptr_.get(); // pass raw pointer to `params`
+
+    // Update the internal units factor (only set through the initializer of the ELBO)
+    integration_parameters_ptr_->SensorAccuracyInternalFactor = internal_units_factor;
 }
 
-ELBO::~ELBO()
+SensorAccuracyELBO::~SensorAccuracyELBO()
 {
     gsl_integration_workspace_free(workspace_);
 }
 
-void ELBO::Reset()
+void SensorAccuracyELBO::Reset()
 {
     integration_parameters_ptr_->Reset();
 }
 
-void ELBO::ComputePredictionNormalizationConstant()
+void SensorAccuracyELBO::ComputePredictionNormalizationConstant()
 {
     // Compute and store the prediction normalization constant
-    double std_dev = std::sqrt(integration_parameters_ptr_->PredictionVariance);
+    double std_dev = integration_parameters_ptr_->PredictionStdDev;
 
     integration_parameters_ptr_->PredictionNormConst = std_dev * (gsl_cdf_ugaussian_P((integration_parameters_ptr_->PredictionUpperBound - integration_parameters_ptr_->PredictionMean) / std_dev) - gsl_cdf_ugaussian_P((integration_parameters_ptr_->PredictionLowerBound - integration_parameters_ptr_->PredictionMean) / std_dev));
 }
 
-void ELBO::ComputeELBO()
+void SensorAccuracyELBO::ComputeELBO()
 {
     // Compute normalization constant for the prediction model
     ComputePredictionNormalizationConstant();

@@ -11,18 +11,18 @@
 int main()
 {
     // Initialize with integration limits of 0.5 and 1.0
-    ELBO elbo(0.5, 1.0);
+    SensorAccuracyELBO elbo(0.5, 1.0);
 
     // Populate parameters of distributions in the ELBO
     auto params_ptr = elbo.GetDistributionParametersPtr();
 
     params_ptr->PredictionMean = 0.95;
-    params_ptr->PredictionVariance = 0.005;
+    params_ptr->PredictionStdDev = std::sqrt(0.005);
     params_ptr->FillRatio = 0.9;
     params_ptr->PredictionLowerBound = 0.5;
     params_ptr->PredictionUpperBound = 1.0;
-    params_ptr->SurrogateMean = 0.998001;
-    params_ptr->SurrogateVariance = 0.001998;
+    params_ptr->SurrogateLoc = 0.998001;
+    params_ptr->SurrogateScale = std::sqrt(0.001998);
     params_ptr->SurrogateLowerBound = 0.5;
     params_ptr->SurrogateUpperBound = 1.0;
     params_ptr->NumBlackTilesSeen = 0;
@@ -47,12 +47,12 @@ int main()
 
     // Modify and compute new integration result
     params_ptr->PredictionMean = 0.768;
-    params_ptr->PredictionVariance = 0.025;
+    params_ptr->PredictionStdDev = std::sqrt(0.025);
     params_ptr->FillRatio = 0.99;
     params_ptr->PredictionLowerBound = 0.5;
     params_ptr->PredictionUpperBound = 1.0;
-    params_ptr->SurrogateMean = 0.88;
-    params_ptr->SurrogateVariance = 0.099;
+    params_ptr->SurrogateLoc = 0.88;
+    params_ptr->SurrogateScale = std::sqrt(0.099);
     params_ptr->SurrogateLowerBound = 0.5;
     params_ptr->SurrogateUpperBound = 1.0;
     params_ptr->NumBlackTilesSeen = 25;
@@ -77,7 +77,7 @@ int main()
 
     // Modify and compute MAP optimization result
     params_ptr->PredictionMean = 0.9940172181925864;
-    params_ptr->PredictionVariance = 0.10000493386913718;
+    params_ptr->PredictionStdDev = std::sqrt(0.10000493386913718);
     params_ptr->FillRatio = 0.7481573110960751;
     params_ptr->PredictionLowerBound = 0.5;
     params_ptr->PredictionUpperBound = 1.0;
@@ -91,8 +91,8 @@ int main()
                                     std::vector<double> &grad,
                                     void *my_func_data) -> double
     {
-        // Cast into ELBO type object
-        ELBO *elbo_obj_ptr = static_cast<ELBO *>(my_func_data);
+        // Cast into SensorAccuracyELBO type object
+        SensorAccuracyELBO *elbo_obj_ptr = static_cast<SensorAccuracyELBO *>(my_func_data);
 
         elbo_obj_ptr->ComputePredictionNormalizationConstant();
 
@@ -155,51 +155,51 @@ int main()
                                      std::vector<double> &grad,
                                      void *my_func_data) -> double
     {
-        // Cast into ELBO type object
-        ELBO *elbo_obj_ptr = static_cast<ELBO *>(my_func_data);
+        // Cast into SensorAccuracyELBO type object
+        SensorAccuracyELBO *elbo_obj_ptr = static_cast<SensorAccuracyELBO *>(my_func_data);
 
         auto params_ptr = elbo_obj_ptr->GetDistributionParametersPtr();
 
-        params_ptr->SurrogateVariance = x[0];
+        params_ptr->SurrogateScale = x[0];
 
         elbo_obj_ptr->ComputeELBO();
 
         return elbo_obj_ptr->GetELBOResult();
     };
 
-    // Modify and compute ELBO optimization result to estimate the surrogate variance
+    // Modify and compute ELBO optimization result to estimate the surrogate standard deviation
     params_ptr->PredictionMean = 0.9940172181925864;
-    params_ptr->PredictionVariance = 0.10000493386913718;
+    params_ptr->PredictionStdDev = std::sqrt(0.10000493386913718);
     params_ptr->FillRatio = 0.794046296702686;
     params_ptr->PredictionLowerBound = 0.5;
     params_ptr->PredictionUpperBound = 1.0;
     params_ptr->NumBlackTilesSeen = 39;
     params_ptr->NumObservations = 50;
-    params_ptr->SurrogateMean = 0.97763716;
-    params_ptr->SurrogateVariance = -1.0;
+    params_ptr->SurrogateLoc = 0.97763716;
+    params_ptr->SurrogateScale = -1.0;
     params_ptr->SurrogateLowerBound = 0.5;
     params_ptr->SurrogateUpperBound = 1.0;
 
     opt.set_max_objective(nlopt_wrapped_ELBO_fcn, &elbo);
-    opt.set_lower_bounds(1e-3);
+    opt.set_lower_bounds(std::sqrt(1e-3));
     opt.set_upper_bounds(HUGE_VAL);
 
-    std::vector<double> x_ELBO{params_ptr->PredictionVariance};
-    double expected_variance = 0.01093531;
+    std::vector<double> x_ELBO{params_ptr->PredictionStdDev};
+    double expected_std_dev = std::sqrt(0.01093531);
 
     try
     {
         nlopt::result result = opt.optimize(x_ELBO, obj_val);
-        if (std::abs(x_ELBO[0] - expected_variance) > OPTIMIZATION_EPSILON)
+        if (std::abs(x_ELBO[0] - expected_std_dev) > OPTIMIZATION_EPSILON)
         {
-            std::cout << "Optimization (variance) Error!" << std::endl;
+            std::cout << "Optimization (standard deviation) Error!" << std::endl;
         }
         else
         {
-            std::cout << "Optimization (variance) Correct!" << std::endl;
+            std::cout << "Optimization (standard deviation) Correct!" << std::endl;
         }
         std::cout << "Computed = " << x_ELBO[0] << std::endl;
-        std::cout << "Expected = " << expected_variance << std::endl;
+        std::cout << "Expected = " << expected_std_dev << std::endl;
         std::cout << "found maximum at f(" << x_ELBO[0] << ") = "
                   << std::setprecision(10) << obj_val << std::endl;
         std::cout << std::endl;

@@ -6,7 +6,7 @@ DynamicDegradationFilterCharlie::DynamicDegradationFilterCharlie(const std::shar
     : SensorDegradationFilter(),
       MAP_optimizer_(nlopt::LN_NELDERMEAD, 1),
       ELBO_optimizer_(nlopt::LN_NELDERMEAD, 1),
-      elbo_(lower_bound, upper_bound)
+      elbo_(lower_bound, upper_bound, SENSOR_ACCURACY_INTERNAL_UNIT_FACTOR)
 {
     collective_perception_algo_ptr_ = col_per_ptr;
 }
@@ -15,6 +15,8 @@ void DynamicDegradationFilterCharlie::Init()
 {
     // Get the pointer to the distribution parameters (related to the distribution, not the filter parameters)
     distribution_params_ptr_ = elbo_.GetDistributionParametersPtr();
+
+    /* Note that distribution_params_ptr_->SensorAccuracyInternalFactor is set by ELBO already */
 
     std::pair<double, double> limits = elbo_.GetIntegrationLimits();
     distribution_params_ptr_->PredictionLowerBound = limits.first;
@@ -27,8 +29,8 @@ void DynamicDegradationFilterCharlie::Init()
                                     std::vector<double> &grad,
                                     void *my_func_data) -> double
     {
-        // Cast into ELBO type object
-        ELBO *elbo_obj_ptr = static_cast<ELBO *>(my_func_data);
+        // Cast into SensorAccuracyELBO type object
+        SensorAccuracyELBO *elbo_obj_ptr = static_cast<SensorAccuracyELBO *>(my_func_data);
 
         elbo_obj_ptr->ComputePredictionNormalizationConstant();
 
@@ -40,10 +42,10 @@ void DynamicDegradationFilterCharlie::Init()
                                      std::vector<double> &grad,
                                      void *my_func_data) -> double
     {
-        // Cast into ELBO type object
-        ELBO *elbo_obj_ptr = static_cast<ELBO *>(my_func_data);
+        // Cast into SensorAccuracyELBO type object
+        SensorAccuracyELBO *elbo_obj_ptr = static_cast<SensorAccuracyELBO *>(my_func_data);
 
-        elbo_obj_ptr->GetDistributionParametersPtr()->SurrogateVariance = x[0]; // update the candidate variance value
+        elbo_obj_ptr->GetDistributionParametersPtr()->SurrogateScale = x[0]; // update the candidate scale value
 
         elbo_obj_ptr->ComputeELBO();
 
@@ -57,30 +59,52 @@ void DynamicDegradationFilterCharlie::Init()
     MAP_optimizer_.set_xtol_abs(1e-9);
 
     ELBO_optimizer_.set_max_objective(nlopt_wrapped_ELBO_fcn, &elbo_);
-    ELBO_optimizer_.set_lower_bounds(1e-3);     // smallest variance value (any smaller the ELBO evaluation will encounter nan/inf values)
-    ELBO_optimizer_.set_upper_bounds(HUGE_VAL); // HUGE_VAL is basically infinity
+    ELBO_optimizer_.set_lower_bounds(3e-2 * distribution_params_ptr_->SensorAccuracyInternalFactor); // smallest std dev value (any smaller the ELBO evaluation will encounter nan/inf values)
+    ELBO_optimizer_.set_upper_bounds(HUGE_VAL);                                                      // HUGE_VAL is basically infinity
     ELBO_optimizer_.set_xtol_abs(1e-9);
 
     // Initialize the prior (initial guess)
-    initial_mean_ = std::stod(params_ptr_->FilterSpecificParams["init_mean_MAP"]);
-    initial_cov_ = std::stod(params_ptr_->FilterSpecificParams["init_var_ELBO"]);
+    initial_mean_ = std::stod(params_ptr_->FilterSpecificParams["init_mean_MAP"]) * distribution_params_ptr_->SensorAccuracyInternalFactor;
+    initial_std_dev_ = std::stod(params_ptr_->FilterSpecificParams["init_std_dev_ELBO"]) * distribution_params_ptr_->SensorAccuracyInternalFactor;
 
     MAP_outcome_.first[0] = initial_mean_;
-    ELBO_outcome_.first[0] = initial_cov_;
+    ELBO_outcome_.first[0] = initial_std_dev_;
 
     // Extract the prediction model parameters
-    model_b_ = std::stod(params_ptr_->FilterSpecificParams["pred_deg_model_B"].c_str());
-    variance_r_ = std::stod(params_ptr_->FilterSpecificParams["pred_deg_variance_R"].c_str());
+    model_b_ = std::stod(params_ptr_->FilterSpecificParams["pred_deg_model_B"].c_str()) * distribution_params_ptr_->SensorAccuracyInternalFactor;
+    std_dev_r_ = std::stod(params_ptr_->FilterSpecificParams["pred_deg_std_dev_R"].c_str()) * distribution_params_ptr_->SensorAccuracyInternalFactor;
 
     // Set the maximum number of past informed estimates to collect
     max_informed_estimate_history_length_ = collective_perception_algo_ptr_->GetParamsPtr()->MaxObservationQueueSize;
 }
 
+void DynamicDegradationFilterCharlie::Reset()
+{
+    // Call parent Reset
+    SensorDegradationFilter::Reset();
+
+    // Clear MAP and ELBO optimizer values
+    MAP_outcome_.first[0] = initial_mean_;
+    ELBO_outcome_.first[0] = initial_std_dev_;
+
+    // Clear buffer for informed estimate (if used)
+    informed_estimate_history_.clear();
+
+    // Reset ELBO and reinitialize the bounds for the internal distributions
+    elbo_.Reset();
+
+    std::pair<double, double> limits = elbo_.GetIntegrationLimits();
+    distribution_params_ptr_->PredictionLowerBound = limits.first;
+    distribution_params_ptr_->PredictionUpperBound = limits.second;
+    distribution_params_ptr_->SurrogateLowerBound = limits.first;
+    distribution_params_ptr_->SurrogateUpperBound = limits.second;
+}
+
 void DynamicDegradationFilterCharlie::Predict()
 {
-    // Compute predicted mean and variance based on a = 1, b = model_b_, and r = variance_r_
-    distribution_params_ptr_->PredictionMean = MAP_outcome_.first[0] + params_ptr_->FilterActivationPeriodTicks * model_b_;         // a^t*x + b*t
-    distribution_params_ptr_->PredictionVariance = ELBO_outcome_.first[0] + variance_r_ * params_ptr_->FilterActivationPeriodTicks; // a^(2*t) * sigma^2 + r*t
+    // Compute predicted mean and std dev based on a = 1, b = model_b_, and r = std_dev_r_
+    distribution_params_ptr_->PredictionMean = MAP_outcome_.first[0] + params_ptr_->FilterActivationPeriodTicks * model_b_;                                           // a^t*x + b*t
+    distribution_params_ptr_->PredictionStdDev = std::sqrt(std::pow(ELBO_outcome_.first[0], 2) + std::pow(std_dev_r_, 2) * params_ptr_->FilterActivationPeriodTicks); // a^(2*t) * sigma^2 + r*t
 }
 
 void DynamicDegradationFilterCharlie::Update()
@@ -101,7 +125,7 @@ void DynamicDegradationFilterCharlie::Update()
     }
 
     // Estimate the truncated normal variance
-    distribution_params_ptr_->SurrogateMean = MAP_outcome_.first[0];
+    distribution_params_ptr_->SurrogateLoc = MAP_outcome_.first[0];
 
     ELBO_optimization_status_ = ELBO_optimizer_.optimize(ELBO_outcome_.first, ELBO_outcome_.second);
 
@@ -132,9 +156,9 @@ void DynamicDegradationFilterCharlie::Estimate()
     // Execute update step
     Update();
 
-    // Update assumed sensor accuracy
-    params_ptr_->AssumedSensorAcc["b"] = MAP_outcome_.first[0];
-    params_ptr_->AssumedSensorAcc["w"] = MAP_outcome_.first[0];
+    // Update assumed sensor accuracy (should be converted OUT of internal units)
+    params_ptr_->AssumedSensorAcc["b"] = MAP_outcome_.first[0] / distribution_params_ptr_->SensorAccuracyInternalFactor;
+    params_ptr_->AssumedSensorAcc["w"] = MAP_outcome_.first[0] / distribution_params_ptr_->SensorAccuracyInternalFactor;
 }
 
 void DynamicDegradationFilterCharlie::ComputeWeightedAverageFillRatio()

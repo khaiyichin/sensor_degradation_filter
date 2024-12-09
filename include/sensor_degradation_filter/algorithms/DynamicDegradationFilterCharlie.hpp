@@ -13,6 +13,8 @@
 #include "SensorDegradationFilter.hpp"
 #include "ELBO.hpp"
 
+#define SENSOR_ACCURACY_INTERNAL_UNIT_FACTOR 1.0 // the sensor accuracy is magnified internally to prevent numerical errors in integration
+
 class DynamicDegradationFilterCharlie : public SensorDegradationFilter
 {
 public:
@@ -22,15 +24,7 @@ public:
 
     virtual void Init() override;
 
-    virtual void Reset() override
-    {
-        SensorDegradationFilter::Reset();
-
-        MAP_outcome_.first[0] = initial_mean_;
-        ELBO_outcome_.first[0] = initial_cov_;
-
-        informed_estimate_history_.clear();
-    }
+    virtual void Reset() override;
 
     virtual void Estimate();
 
@@ -43,7 +37,7 @@ private:
 
     std::shared_ptr<CollectivePerception> collective_perception_algo_ptr_;
 
-    std::shared_ptr<DistributionParameters> distribution_params_ptr_;
+    std::shared_ptr<SensorAccuracyDistributionParameters> distribution_params_ptr_;
 
     nlopt::opt ELBO_optimizer_;
 
@@ -53,7 +47,7 @@ private:
 
     nlopt::result MAP_optimization_status_;
 
-    ELBO elbo_;
+    SensorAccuracyELBO elbo_;
 
     std::pair<std::vector<double>, double> MAP_outcome_ = {{-1.0}, -1.0};
 
@@ -65,11 +59,11 @@ private:
 
     double model_b_ = 0.0; // our model of what the drift coefficient is (default: no drift)
 
-    double variance_r_ = -1.0; // our model of what the diffusion coefficient is (default: invalid value; requires setting)
+    double std_dev_r_ = -1.0; // our model of what the diffusion coefficient is (default: invalid value; requires setting)
 
     double initial_mean_ = -1.0; // initial guess for the MAP estimate (default: invalid value; requires setting)
 
-    double initial_cov_ = -1.0; // initial guess for the ELBO estimate (default: invalid value: requires setting)
+    double initial_std_dev_ = -1.0; // initial guess for the ELBO estimate (default: invalid value: requires setting)
 };
 
 #endif

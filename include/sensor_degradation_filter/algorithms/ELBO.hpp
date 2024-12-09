@@ -7,43 +7,47 @@
 #include <gsl/gsl_cdf.h>
 #include <gsl/gsl_integration.h>
 
-struct DistributionParameters
+struct SensorAccuracyDistributionParameters
 {
     void Reset()
     {
         PredictionMean = -1.0;
-        PredictionVariance = -1.0;
+        PredictionStdDev = -1.0;
         PredictionNormConst = -1.0;
         FillRatio = -1.0;
-        SurrogateMean = -1.0;
-        SurrogateVariance = -1.0;
-        NumBlackTilesSeen = -1;
-        NumObservations = -1;
+        SurrogateLoc = -1.0;
+        SurrogateScale = -1.0;
+        NumBlackTilesSeen = 0;
+        NumObservations = 0;
+
+        // SensorAccuracyInternalFactor is not reset because the internal units stay the same
     }
 
-    double PredictionMean;
+    double PredictionMean = -1.0;
 
-    double PredictionVariance;
+    double PredictionStdDev = -1.0;
 
-    double PredictionNormConst;
+    double PredictionNormConst = -1.0;
 
-    double FillRatio;
+    double FillRatio = -1.0;
 
-    double PredictionLowerBound;
+    double PredictionLowerBound = -1.0;
 
-    double PredictionUpperBound;
+    double PredictionUpperBound = -1.0;
 
-    double SurrogateMean;
+    double SurrogateLoc = -1.0;
 
-    double SurrogateVariance;
+    double SurrogateScale = -1.0;
 
-    double SurrogateLowerBound;
+    double SurrogateLowerBound = -1.0;
 
-    double SurrogateUpperBound;
+    double SurrogateUpperBound = -1.0;
 
-    size_t NumBlackTilesSeen;
+    size_t NumBlackTilesSeen = 0;
 
-    size_t NumObservations;
+    size_t NumObservations = 0;
+
+    double SensorAccuracyInternalFactor = 1.0;
 };
 
 // Declare generic PDF functions for global usage (NLopt wants a C-style function pointer, which makes member functions more complicated to use)
@@ -53,12 +57,12 @@ double observation_likelihood_binomial_pdf(double x, void *params);
 double joint_density_fcn(double x, void *params);
 double ELBO_integrand(double x, void *params);
 
-class ELBO
+class SensorAccuracyELBO
 {
 public:
-    ELBO(double a, double b, size_t n = 1000);
+    SensorAccuracyELBO(double a, double b, double internal_units_factor = 1.0, size_t n = 1000);
 
-    ~ELBO();
+    ~SensorAccuracyELBO();
 
     void Reset();
 
@@ -80,7 +84,7 @@ public:
 
     double GetELBOError() const { return integration_outputs_.second; }
 
-    std::shared_ptr<DistributionParameters> GetDistributionParametersPtr() { return integration_parameters_ptr_; }
+    std::shared_ptr<SensorAccuracyDistributionParameters> GetDistributionParametersPtr() { return integration_parameters_ptr_; }
 
 private:
     size_t workspace_size_;
@@ -89,7 +93,7 @@ private:
 
     gsl_function integrand_;
 
-    std::shared_ptr<DistributionParameters> integration_parameters_ptr_;
+    std::shared_ptr<SensorAccuracyDistributionParameters> integration_parameters_ptr_;
 
     std::pair<double, double> integration_limits_; // lower and upper limit
 
