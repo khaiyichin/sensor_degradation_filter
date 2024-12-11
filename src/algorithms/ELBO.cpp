@@ -12,9 +12,9 @@ double surrogate_trunc_normal_pdf(double x, void *params)
     SensorAccuracyDistributionParameters *dist_params = static_cast<SensorAccuracyDistributionParameters *>(params);
 
     // Compute the normalization constant
-    double std_dev = dist_params->SurrogateScale;
-
-    double norm_const = std_dev * (gsl_cdf_ugaussian_P((dist_params->SurrogateUpperBound - dist_params->SurrogateLoc) / std_dev) - gsl_cdf_ugaussian_P((dist_params->SurrogateLowerBound - dist_params->SurrogateLoc) / std_dev));
+    double norm_const =
+        dist_params->SurrogateScale * (gsl_cdf_ugaussian_P((dist_params->SurrogateUpperBound - dist_params->SurrogateLoc) / dist_params->SurrogateScale) -
+                                       gsl_cdf_ugaussian_P((dist_params->SurrogateLowerBound - dist_params->SurrogateLoc) / dist_params->SurrogateScale));
 
     return gsl_ran_ugaussian_pdf((x - dist_params->SurrogateLoc) / dist_params->SurrogateScale) / norm_const;
 }
@@ -101,9 +101,9 @@ void SensorAccuracyELBO::Reset()
 void SensorAccuracyELBO::ComputePredictionNormalizationConstant()
 {
     // Compute and store the prediction normalization constant
-    double std_dev = integration_parameters_ptr_->PredictionStdDev;
-
-    integration_parameters_ptr_->PredictionNormConst = std_dev * (gsl_cdf_ugaussian_P((integration_parameters_ptr_->PredictionUpperBound - integration_parameters_ptr_->PredictionMean) / std_dev) - gsl_cdf_ugaussian_P((integration_parameters_ptr_->PredictionLowerBound - integration_parameters_ptr_->PredictionMean) / std_dev));
+    integration_parameters_ptr_->PredictionNormConst =
+        integration_parameters_ptr_->PredictionStdDev * (gsl_cdf_ugaussian_P((integration_parameters_ptr_->PredictionUpperBound - integration_parameters_ptr_->PredictionMean) / integration_parameters_ptr_->PredictionStdDev) -
+                                                         gsl_cdf_ugaussian_P((integration_parameters_ptr_->PredictionLowerBound - integration_parameters_ptr_->PredictionMean) / integration_parameters_ptr_->PredictionStdDev));
 }
 
 void SensorAccuracyELBO::ComputeELBO()
