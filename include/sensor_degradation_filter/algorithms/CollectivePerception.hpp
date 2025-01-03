@@ -72,6 +72,7 @@ public:
             NumBlackTilesSeen = 0;
             NumObservations = 0;
             ObservationQueue.clear();
+            InformedEstimateHistory.clear();
         }
 
         void AddToQueue(unsigned int obs)
@@ -93,6 +94,28 @@ public:
             NumBlackTilesSeen = std::accumulate(ObservationQueue.begin(), ObservationQueue.end(), 0);
         }
 
+        double ComputeWeightedAverageFillRatio(double latest_informed_estimate)
+        {
+            // Store the most recent informed estimate
+            InformedEstimateHistory.push_back(latest_informed_estimate);
+
+            if (InformedEstimateHistory.size() > MaxInformedEstimateHistoryLength)
+            {
+                InformedEstimateHistory.pop_front();
+            }
+
+            // Compute the weighted average (weighing older estimates as heavier)
+            double numerator = 0.0;
+            double denominator = InformedEstimateHistory.size() * (InformedEstimateHistory.size() + 1) / 2.0;
+
+            for (size_t i = InformedEstimateHistory.size(); i > 0; --i)
+            {
+                numerator += i * InformedEstimateHistory[InformedEstimateHistory.size() - i];
+            }
+
+            return numerator / denominator;
+        }
+
         unsigned int NumBlackTilesSeen = 0;
 
         unsigned int NumObservations = 0;
@@ -100,6 +123,10 @@ public:
         unsigned int MaxObservationQueueSize = 0;
 
         std::deque<unsigned int> ObservationQueue;
+
+        std::deque<double> InformedEstimateHistory;
+
+        size_t MaxInformedEstimateHistoryLength = 0;
 
         std::vector<EstConfPair> MostRecentNeighborEstimates;
 

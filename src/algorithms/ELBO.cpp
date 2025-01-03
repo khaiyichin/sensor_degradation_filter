@@ -60,6 +60,7 @@ double observation_likelihood_binomial_pdf(double x, void *params)
 double joint_density_fcn(double x, void *params)
 {
     double joint_value = observation_likelihood_binomial_pdf(x, params) * prediction_trunc_normal_pdf(x, params);
+
     return joint_value <= 0.0 ? 1e-9 : joint_value; // ensure that a non-zero value is returned
 }
 

@@ -29,11 +29,11 @@ struct SensorAccuracyDistributionParameters
 
     double PredictionNormConst = -1.0;
 
-    double FillRatio = -1.0;
-
     double PredictionLowerBound = -1.0;
 
     double PredictionUpperBound = -1.0;
+
+    double FillRatio = -1.0;
 
     double SurrogateLoc = -1.0;
 

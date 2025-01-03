@@ -4,6 +4,7 @@
 #include "algorithms/StaticDegradationFilterAlpha.hpp"
 #include "algorithms/StaticDegradationFilterBravo.hpp"
 #include "algorithms/DynamicDegradationFilterCharlie.hpp"
+#include "algorithms/DynamicDegradationFilterDelta.hpp"
 
 KheperaIVDiffusionMotion::WheelTurningParams::WheelTurningParams() : TurnMech(TurningMechanism::NO_TURN),
                                                                      HardTurnOnAngleThreshold(ToRadians(CDegrees(90.0))),
@@ -149,21 +150,38 @@ void KheperaIVDiffusionMotion::Init(TConfigurationNode &xml_node)
             std::make_shared<DynamicDegradationFilterCharlie>(collective_perception_algo_ptr_);
         sensor_degradation_filter_ptr_->GetParamsPtr()->Method = "CHARLIE";
 
-        std::string pred_deg_model_B_str, pred_deg_std_dev_R_str, init_mean_MAP_str, init_std_dev_ELBO_str;
+        std::string pred_deg_model_B_str, pred_deg_var_R_str, init_mean_MAP_str, init_std_dev_ELBO_str;
 
         GetNodeAttribute(GetNode(sensor_degradation_filter_node, "params"), "pred_deg_model_B", pred_deg_model_B_str);
-        GetNodeAttribute(GetNode(sensor_degradation_filter_node, "params"), "pred_deg_std_dev_R", pred_deg_std_dev_R_str);
+        GetNodeAttribute(GetNode(sensor_degradation_filter_node, "params"), "pred_deg_var_R", pred_deg_var_R_str);
         GetNodeAttribute(GetNode(sensor_degradation_filter_node, "params"), "init_std_dev_ELBO", init_std_dev_ELBO_str);
         GetNodeAttribute(GetNode(sensor_degradation_filter_node, "params"), "init_mean_MAP", init_mean_MAP_str);
 
         sensor_degradation_filter_ptr_->GetParamsPtr()->FilterSpecificParams = {{"pred_deg_model_B", pred_deg_model_B_str},
-                                                                                {"pred_deg_std_dev_R", pred_deg_std_dev_R_str},
+                                                                                {"pred_deg_var_R", pred_deg_var_R_str},
                                                                                 {"init_std_dev_ELBO", init_std_dev_ELBO_str},
                                                                                 {"init_mean_MAP", init_mean_MAP_str}};
     }
-    // else if (method == "DELTA")
-    // {
-    // }
+    else if (method == "DELTA")
+    {
+        sensor_degradation_filter_ptr_ =
+            std::make_shared<DynamicDegradationFilterDelta>(collective_perception_algo_ptr_);
+        sensor_degradation_filter_ptr_->GetParamsPtr()->Method = "DELTA";
+
+        std::string pred_deg_model_B_str, pred_deg_var_R_str, init_mean_str, init_var_str, variant_str;
+
+        GetNodeAttribute(GetNode(sensor_degradation_filter_node, "params"), "pred_deg_model_B", pred_deg_model_B_str);
+        GetNodeAttribute(GetNode(sensor_degradation_filter_node, "params"), "pred_deg_var_R", pred_deg_var_R_str);
+        GetNodeAttribute(GetNode(sensor_degradation_filter_node, "params"), "init_mean", init_mean_str);
+        GetNodeAttribute(GetNode(sensor_degradation_filter_node, "params"), "init_var", init_var_str);
+        GetNodeAttribute(GetNode(sensor_degradation_filter_node, "params"), "variant", variant_str);
+
+        sensor_degradation_filter_ptr_->GetParamsPtr()->FilterSpecificParams = {{"pred_deg_model_B", pred_deg_model_B_str},
+                                                                                {"pred_deg_var_R", pred_deg_var_R_str},
+                                                                                {"init_mean", init_mean_str},
+                                                                                {"init_var", init_var_str},
+                                                                                {"variant", variant_str}};
+    }
     else
     {
         throw std::runtime_error("Unknown static degradation filter method, please double-check the XML file.");
