@@ -118,7 +118,7 @@ void DynamicDegradationFilterDelta::Init()
     nonlinear_state_prediction_function_ = [this](double prev_mean, const std::vector<double> &input_coefficients)
     {
         return prev_mean +
-               this->params_ptr_->FilterActivationPeriodTicks * this->linearized_state_prediction_b_; // this->* can be used here because the value are constant
+               this->params_ptr_->FilterActivationPeriodTicks * this->linearized_state_prediction_b_;
     };
 
     // Initialize measurement update parameters
@@ -157,7 +157,6 @@ void DynamicDegradationFilterDelta::Init()
 
             return gsl_ran_binomial_pdf(dist_params->NumBlackTilesSeen, success_probability, dist_params->NumObservations) *
                    gsl_ran_ugaussian_pdf((x[0] - dist_params->PredictionMean) / dist_params->PredictionStdDev);
-            // return joint_value <= 0.0 ? std::numeric_limits<double>::epsilon() : joint_value; // prevent joint_value from being 0.0
         };
 
         MAP_optimizer_.set_max_objective(nlopt_wrapped_MAP_fcn, &lap_params_);
@@ -188,15 +187,25 @@ void DynamicDegradationFilterDelta::Update()
     {
     case Variant::BinomialApproximation:
     {
-        // Update the measurement jacobian and noise models
-        linearized_measurement_update_c_ = collective_perception_algo_ptr_->GetParamsPtr()->NumObservations *
-                                           (2 * collective_perception_algo_ptr_->GetInformedVals().X - 1) / internal_unit_factor_;
-        measurement_update_q_ = collective_perception_algo_ptr_->GetParamsPtr()->NumObservations *
-                                (std::pow(2 * prediction_.first / internal_unit_factor_ - 1, 2) * (collective_perception_algo_ptr_->GetInformedVals().X - std::pow(collective_perception_algo_ptr_->GetInformedVals().X, 2) - 0.25) +
-                                 0.25);
+        // Use np >= 5 && nq >= 5 rule to see if normal approximation holds
+        if (collective_perception_algo_ptr_->GetParamsPtr()->NumObservations * (prediction_.first / internal_unit_factor_) >= 5 &&
+            collective_perception_algo_ptr_->GetParamsPtr()->NumObservations * (1 - prediction_.first / internal_unit_factor_) >= 5)
+        {
 
-        // Run the base update step
-        ExtendedKalmanFilter::Update(collective_perception_algo_ptr_->GetParamsPtr()->NumBlackTilesSeen, empty_vec_double_);
+            // Update the measurement jacobian and noise models
+            linearized_measurement_update_c_ = collective_perception_algo_ptr_->GetParamsPtr()->NumObservations *
+                                               (2 * collective_perception_algo_ptr_->GetInformedVals().X - 1) / internal_unit_factor_;
+            measurement_update_q_ = collective_perception_algo_ptr_->GetParamsPtr()->NumObservations *
+                                    (std::pow(2 * prediction_.first / internal_unit_factor_ - 1, 2) * (collective_perception_algo_ptr_->GetInformedVals().X - std::pow(collective_perception_algo_ptr_->GetInformedVals().X, 2) - 0.25) +
+                                     0.25);
+
+            // Run the base update step
+            ExtendedKalmanFilter::Update(collective_perception_algo_ptr_->GetParamsPtr()->NumBlackTilesSeen, empty_vec_double_);
+        }
+        else // approximation doesn't hold up well, do nothing
+        {
+            update_ = prediction_;
+        }
         break;
     }
 
@@ -225,7 +234,13 @@ void DynamicDegradationFilterDelta::Update()
         /* The approximated variance is found using Mathematica:
 
             FullSimplify[
-                1/-D[Log[(b  f + (1 - b)  (1 - f))^       n  (1 - (b  f + (1 - b)  (1 - f)))^(t - n)  Exp[-((b - \[Mu])/\[Sigma])^2/2]], {b, 2}]
+                1 / -D[
+                    Log[
+                        (b f + (1 - b) (1 - f))^n (1 - (b f + (1 - b) (1 - f)))^(t - n) Exp[
+                            -((b - \[Mu]) / \[Sigma])^2/2
+                        ]
+                    ], {b, 2}
+                ]
             ]
 
         */
@@ -249,8 +264,18 @@ void DynamicDegradationFilterDelta::Estimate()
     // Execute prediction step
     Predict();
 
+    if (std::isnan(prediction_.first) || std::isnan(prediction_.second))
+    {
+        throw std::runtime_error("NaN values encountered in the predicted values.");
+    }
+
     // Execute update step
     Update();
+
+    if (std::isnan(update_.first) || std::isnan(prediction_.second))
+    {
+        throw std::runtime_error("NaN values encountered in the updated values.");
+    }
 
     // Find the constrained version of the sensor accuracy; the constrained values are not fed back into the filter
     ComputeConstrainedSensorAccuracy();

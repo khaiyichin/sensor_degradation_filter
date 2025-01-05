@@ -43,18 +43,22 @@ TEMPLATE_ARGOSFILE=${DATADIR}/param_multi_robot_sim_1d_dynamic_degradation_DELTA
 # Parameters related to this job
 # (To be changed by the high level script)
 NUM_ROBOTS=15
-CORRECT_FILTER=false            # whether non-flawed robots should run the filter (this only applies for *non-flawed* robots)
+CORRECT_FILTER=false # whether non-flawed robots should run the filter (this only applies for *non-flawed* robots)
 if [[ "${CORRECT_FILTER}" == "true" ]]; then CORFILT=1; else CORFILT=0; fi
 NUM_FLAWED_ROBOTS=${NUM_ROBOTS} # set all robots to be flawed so that the filter will be run for all of them
 DENSITY=0.1                     # desired swarm density
 WALL_POSITION=7.64781           # computed from desired density
 TRUE_DEG_DRIFT=-5e-5            # true sensor degradation drift coefficient (Wiener model)
 TRUE_DEG_DIFFUSION=1e-3         # true sensor degradation drift coefficient (Wiener model)
+LOWEST_DEGRADED_ACC_LVL=600     # lowest true accuracy value that the sensor will degrade to, in 1000s format
+LDAL_DEC=0.6                    # lowest true accuracy value in decimal format (bash doesn't support decimal math)
 METHOD=DELTA                    # filter type
 OBS_Q_SIZE=200                  # observation queue size
 PRED_DEG_MODEL_B=-5e-5          # state prediction model B
 PRED_DEG_VAR_R=1e-6             # state prediction variance R
 INIT_VAR=1e-2                   # initial variance for the filter (the initial mean will be the initial assumed sensor accuracy)
+LOWEST_ASSUMED_ACC_LVL=500      # lowest assumed accuracy value that the filter will estimate, in 1000s format
+LAAL_DEC=0.5                    # lowest assumed accuracy value in decimal format (bash doesn't support decimal math)
 
 # Parameters related to this job
 # (Fixed)
@@ -125,6 +129,7 @@ sed -i -E "/<ground_sensor/,/\/>/ s/([[:space:]]*period_ticks=\")[^\"]*/\1${MEAS
 sed -i -E "/<ground_sensor/,/\/>/ s/([[:space:]]*dynamic=\")[^\"]*/\1${DYNAMIC_DEGRADATION}/" ${ACTUAL_ARGOSFILE}
 sed -i -E "/<ground_sensor/,/\/>/ s/([[:space:]]*true_deg_drift_coeff=\")[^\"]*/\1${TRUE_DEG_DRIFT}/" ${ACTUAL_ARGOSFILE}
 sed -i -E "/<ground_sensor/,/\/>/ s/([[:space:]]*true_deg_diffusion_coeff=\")[^\"]*/\1${TRUE_DEG_DIFFUSION}/" ${ACTUAL_ARGOSFILE}
+sed -i -E "/<ground_sensor/,/\/>/ s/([[:space:]]*lowest_degraded_acc_lvl=\")[^\"]*/\1${LDAL_DEC}/" ${ACTUAL_ARGOSFILE}
 
 # Configure communication period
 sed -i "s/<comms period_ticks=.*/<comms period_ticks=\"${COMMS_PERIOD}\" \/>/" ${ACTUAL_ARGOSFILE}
@@ -139,6 +144,7 @@ sed -i -E "/<sensor_degradation_filter/,/<\/sensor_degradation_filter>/ s/(obser
 sed -i -E "/<sensor_degradation_filter/,/<\/sensor_degradation_filter>/ s/(pred_deg_model_B=\")[^\"]*/\1${PRED_DEG_MODEL_B}/" ${ACTUAL_ARGOSFILE}
 sed -i -E "/<sensor_degradation_filter/,/<\/sensor_degradation_filter>/ s/(pred_deg_var_R=\")[^\"]*/\1${PRED_DEG_VAR_R}/" ${ACTUAL_ARGOSFILE}
 sed -i -E "/<sensor_degradation_filter/,/<\/sensor_degradation_filter>/ s/(init_var=\")[^\"]*/\1${INIT_VAR}/" ${ACTUAL_ARGOSFILE}
+sed -i -E "/<sensor_degradation_filter/,/<\/sensor_degradation_filter>/ s/(lowest_assumed_acc_lvl=\")[^\"]*/\1${LAAL_DEC}/" ${ACTUAL_ARGOSFILE}
 
 # Configure loop functions
 sed -i -E "/<loop_functions/,/<\/loop_functions>/ s/(num_trials value=\")[^\"]*/\1${NUM_TRIALS}/" ${ACTUAL_ARGOSFILE}
@@ -175,8 +181,6 @@ sed -i "s/<entity.*/<entity quantity=\"${NUM_ROBOTS}\" max_trials=\"100\" base_n
 
     # Iterate over assumed sensor accuracies
     for ((i = 0; i < ${#ASSUMED_ACC[@]}; i++)); do
-
-        # TODO: SED HERE
         sed -i -E "/<loop_functions/,/<\/loop_functions>/ s/(flawed_robots[[:space:]]*num=\")[^\"]*(\"[[:space:]]*acc_b=\")[^\"]*(\"[[:space:]]*acc_w=\")[^\"]*(\"[[:space:]]*activate_filter_for_all=\")[^\"]*/\1${NUM_FLAWED_ROBOTS}\2${ASSUMED_ACC_DEC[i]}\3${ASSUMED_ACC_DEC[i]}\4${CORRECT_FILTER}/" ${ACTUAL_ARGOSFILE}
         sed -i -E "/<sensor_degradation_filter/,/<\/sensor_degradation_filter>/ s/(init_mean=\")[^\"]*/\1${ASSUMED_ACC_DEC[i]}/" ${ACTUAL_ARGOSFILE}
 
@@ -192,7 +196,7 @@ sed -i "s/<entity.*/<entity quantity=\"${NUM_ROBOTS}\" max_trials=\"100\" base_n
                 # Current date and time
                 CURR_DATETIME=$(date "+%m%d%y_%H%M%S")
 
-                JSON_FOLDER=${CURR_DATETIME}_t${#SEEDS[@]}_s${NUM_TICKS}_tfr${TFR[k]}_flw${NUM_FLAWED_ROBOTS}_flwb${ASSUMED_ACC[i]}_corb${TRUE_ACC[j]}_drift${TRUE_DEG_DRIFT}_diff${TRUE_DEG_DIFFUSION}_modelb${PRED_DEG_MODEL_B}_modelr${PRED_DEG_VAR_R}_commsp${COMMSP}_filtp${FILTER_PERIOD}_corfilt${CORFILT}
+                JSON_FOLDER="${CURR_DATETIME}_t${#SEEDS[@]}_s${NUM_TICKS}_tfr${TFR[k]}_flw${NUM_FLAWED_ROBOTS}_flwb${ASSUMED_ACC[i]}_corb${TRUE_ACC[j]}_drift${TRUE_DEG_DRIFT}_diff${TRUE_DEG_DIFFUSION}_ldal${LOWEST_DEGRADED_ACC_LVL}_modelb${PRED_DEG_MODEL_B}_modelr${PRED_DEG_VAR_R}_laal${LOWEST_ASSUMED_ACC_LVL}_commsp${COMMSP}_filtp${FILTER_PERIOD}_corfilt${CORFILT}"
                 mkdir -p data/${JSON_FOLDER}
 
                 # Configure output path
@@ -215,18 +219,19 @@ sed -i "s/<entity.*/<entity quantity=\"${NUM_ROBOTS}\" max_trials=\"100\" base_n
                         sed -i "s/<experiment.*/<experiment length=\"$((${NUM_TICKS} / ${TICKS_PER_SECOND}))\" ticks_per_second=\"${TICKS_PER_SECOND}\" random_seed=\"${SEEDS[m]}\" \/>/" ${ACTUAL_ARGOSFILE}
 
                         # Run the experiment
-                        echo -n "Running trial index=${m} ($((${#SEEDS[@]}-${m}))/${#SEEDS[@]})... "
+                        echo -n "Running trial index=${m} ($((${#SEEDS[@]} - ${m}))/${#SEEDS[@]})... "
                         run_dynamic_topo_simulations -l /dev/null -c ${ACTUAL_ARGOSFILE}
                         echo "Done!"
 
                         # Modify the JSON data file so that `trial_ind` value reflects the correct trial index
                         sed -i -E "s/([[:space:]]*\"num_trials\"[[:space:]]*:[[:space:]]*)[0-9]+/\1${#SEEDS[@]}/" data/${JSON_FOLDER}/${UNPROCESSED_DATA_FILE}
+                        sed -i -E "s/([[:space:]]*\"trial_ind\"[[:space:]]*:[[:space:]]*)0/\1${m}/" data/${JSON_FOLDER}/${UNPROCESSED_DATA_FILE}
 
                         # Rename and move the file
                         mv data/${JSON_FOLDER}/${UNPROCESSED_DATA_FILE} data/${JSON_FOLDER}/${VARIANTS[l]}_variant/flw${NUM_FLAWED_ROBOTS}_t${m}.json
                     done
 
-                    echo "\n" # separate the stdout statements
+                    echo -e "\n" # separate the stdout statements
                 done
 
                 # Create a copy of the modifed configuration file in the current folder

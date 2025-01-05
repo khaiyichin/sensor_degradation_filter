@@ -112,9 +112,19 @@ void KheperaIVDiffusionMotion::Init(TConfigurationNode &xml_node)
     GetNodeAttribute(GetNode(xml_node, "ground_sensor"), "dynamic", ground_sensor_params_.IsDynamic);
     GetNodeAttribute(GetNode(xml_node, "ground_sensor"), "true_deg_drift_coeff", ground_sensor_params_.DegradationCoefficients["drift"]);
     GetNodeAttribute(GetNode(xml_node, "ground_sensor"), "true_deg_diffusion_coeff", ground_sensor_params_.DegradationCoefficients["diffusion"]);
+    GetNodeAttributeOrDefault(GetNode(xml_node, "ground_sensor"), "lowest_degraded_acc_lvl", ground_sensor_params_.LowestDegradedAccuracyLevel, 0.5 + ZERO_APPROX);
     GetNodeAttribute(GetNode(xml_node, "comms"), "period_ticks", comms_params_.CommsPeriodTicks);
 
-    ground_sensor_params_.InitialActualAcc = ground_sensor_params_.ActualSensorAcc;
+    ground_sensor_params_.InitialActualAcc = ground_sensor_params_.ActualSensorAcc; // keep a copy of the original
+
+    if (ground_sensor_params_.LowestDegradedAccuracyLevel == 0.5)
+    {
+        ground_sensor_params_.LowestDegradedAccuracyLevel = 0.5 + ZERO_APPROX; // to prevent numerical issues
+    }
+    else if (ground_sensor_params_.LowestDegradedAccuracyLevel < 0.5)
+    {
+        THROW_ARGOSEXCEPTION("Cannot have a sensor accuracy lower than 0.5.");
+    }
 
     // Initialize degradation filter
     TConfigurationNode &sensor_degradation_filter_node = GetNode(xml_node, "sensor_degradation_filter");
@@ -164,11 +174,24 @@ void KheperaIVDiffusionMotion::Init(TConfigurationNode &xml_node)
     }
     else if (method == "DELTA")
     {
-        sensor_degradation_filter_ptr_ =
-            std::make_shared<DynamicDegradationFilterDelta>(collective_perception_algo_ptr_);
-        sensor_degradation_filter_ptr_->GetParamsPtr()->Method = "DELTA";
-
         std::string pred_deg_model_B_str, pred_deg_var_R_str, init_mean_str, init_var_str, variant_str;
+        double lowest_assumed_acc_lvl;
+
+        // Check to see if the lowest assumed accuracy level possible is provided
+        GetNodeAttributeOrDefault(GetNode(sensor_degradation_filter_node, "params"), "lowest_assumed_acc_lvl", lowest_assumed_acc_lvl, 0.5 + ZERO_APPROX);
+
+        if (lowest_assumed_acc_lvl == 0.5)
+        {
+            lowest_assumed_acc_lvl = 0.5 + ZERO_APPROX; // to prevent numerical issues
+        }
+        else if (lowest_assumed_acc_lvl < 0.5)
+        {
+            THROW_ARGOSEXCEPTION("Cannot have an assumed sensor accuracy lower than 0.5.");
+        }
+
+        sensor_degradation_filter_ptr_ =
+            std::make_shared<DynamicDegradationFilterDelta>(collective_perception_algo_ptr_, lowest_assumed_acc_lvl);
+        sensor_degradation_filter_ptr_->GetParamsPtr()->Method = "DELTA";
 
         GetNodeAttribute(GetNode(sensor_degradation_filter_node, "params"), "pred_deg_model_B", pred_deg_model_B_str);
         GetNodeAttribute(GetNode(sensor_degradation_filter_node, "params"), "pred_deg_var_R", pred_deg_var_R_str);
@@ -180,7 +203,8 @@ void KheperaIVDiffusionMotion::Init(TConfigurationNode &xml_node)
                                                                                 {"pred_deg_var_R", pred_deg_var_R_str},
                                                                                 {"init_mean", init_mean_str},
                                                                                 {"init_var", init_var_str},
-                                                                                {"variant", variant_str}};
+                                                                                {"variant", variant_str},
+                                                                                {"lowest_assumed_acc_lvl", std::to_string(lowest_assumed_acc_lvl)}};
     }
     else
     {
@@ -378,10 +402,9 @@ void KheperaIVDiffusionMotion::EvolveSensorDegradation()
     ground_sensor_params_.ActualSensorAcc["b"] += RNG_ptr_->Gaussian(ground_sensor_params_.DegradationCoefficients["diffusion"], ground_sensor_params_.DegradationCoefficients["drift"]);
 
     // Saturate sensor accuracy levels
-    // ground_sensor_params_.ActualSensorAcc["b"] = std::min(std::max(ground_sensor_params_.ActualSensorAcc["b"], 0.5 + ZERO_APPROX), 1.0 + ZERO_APPROX);
-    if (ground_sensor_params_.ActualSensorAcc["b"] <= 0.5)
+    if (ground_sensor_params_.ActualSensorAcc["b"] <= ground_sensor_params_.LowestDegradedAccuracyLevel)
     {
-        ground_sensor_params_.ActualSensorAcc["b"] = 0.5 + ZERO_APPROX;
+        ground_sensor_params_.ActualSensorAcc["b"] = ground_sensor_params_.LowestDegradedAccuracyLevel;
     }
     else if (ground_sensor_params_.ActualSensorAcc["b"] >= 1.0)
     {

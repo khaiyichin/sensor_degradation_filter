@@ -71,6 +71,7 @@ public:
         bool IsSimulated = true;
         bool IsDynamic = false;
         UInt32 GroundMeasurementPeriodTicks = 0;
+        Real LowestDegradedAccuracyLevel = 0.5;
         std::unordered_map<std::string, Real> ActualSensorAcc = {{"b", -1.0}, {"w", -1.0}};
         std::unordered_map<std::string, Real> InitialActualAcc = {{"b", -1.0}, {"w", -1.0}};
         std::unordered_map<std::string, Real> DegradationCoefficients = {{"drift", 0.0}, {"diffusion", -1.0}};

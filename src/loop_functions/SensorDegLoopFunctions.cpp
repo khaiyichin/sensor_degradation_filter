@@ -114,6 +114,7 @@ void SensorDegLoopFunctions::Init(TConfigurationNode &t_tree)
         exp_params_.DynamicDegradation = diffusion_controller.GetGroundSensorParams().IsDynamic;
         exp_params_.GroundSensorDriftCoeff = diffusion_controller.GetGroundSensorParams().DegradationCoefficients["drift"];
         exp_params_.GroundSensorDiffusionCoeff = diffusion_controller.GetGroundSensorParams().DegradationCoefficients["diffusion"];
+        exp_params_.LowestDegradedAccuracyLevel = diffusion_controller.GetGroundSensorParams().LowestDegradedAccuracyLevel;
 
         // Grab observation queue size (0 if no queue is used)
         exp_params_.ObservationQueueSize = diffusion_controller.GetCollectivePerceptionParams().MaxObservationQueueSize;
@@ -351,7 +352,7 @@ void SensorDegLoopFunctions::SaveData()
 void SensorDegLoopFunctions::InitializeJSON()
 {
     curr_json_ = ordered_json{};
-    curr_json_["sim_type"] = "dynamic_topo_static_deg_1d";
+    curr_json_["sim_type"] = exp_params_.DynamicDegradation ? "dynamic_topo_dynamic_deg_1d" : "dynamic_topo_static_deg_1d";
     curr_json_["seed"] = GetSimulator().GetRandomSeed();
     curr_json_["num_robots"] = exp_params_.NumRobots;
     curr_json_["num_flawed_robots"] = exp_params_.NumFlawedRobots;
@@ -374,6 +375,7 @@ void SensorDegLoopFunctions::InitializeJSON()
     curr_json_["dynamic_degradation"] = exp_params_.DynamicDegradation;
     curr_json_["true_drift_coeff"] = exp_params_.GroundSensorDriftCoeff;
     curr_json_["true_diffusion_coeff"] = exp_params_.GroundSensorDiffusionCoeff;
+    curr_json_["lowest_degraded_acc_lvl"] = exp_params_.LowestDegradedAccuracyLevel;
     curr_json_["obs_queue_size"] = exp_params_.ObservationQueueSize;
     curr_json_["flawed_sensor_acc_b"] = exp_params_.AssumedSensorAcc["b"];
     curr_json_["flawed_sensor_acc_w"] = exp_params_.AssumedSensorAcc["w"];

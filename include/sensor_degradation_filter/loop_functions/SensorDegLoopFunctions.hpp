@@ -57,6 +57,8 @@ struct ExperimentParams
 
     Real GroundSensorDiffusionCoeff = -1.0;
 
+    Real LowestDegradedAccuracyLevel = -1.0;
+
     bool DistributeRobotPlacement = false;
 
     bool FilterActiveForAll = false;
