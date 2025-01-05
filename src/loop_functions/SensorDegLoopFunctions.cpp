@@ -170,7 +170,7 @@ void SensorDegLoopFunctions::Init(TConfigurationNode &t_tree)
         // Check if folder exists
         if (!std::filesystem::exists(exp_params_.SaveFolder))
         {
-            THROW_ARGOSEXCEPTION("Save folder doesn't exist.");
+            THROW_ARGOSEXCEPTION("Save folder " + exp_params_.SaveFolder + " doesn't exist.");
         }
 
         if (verbose_level_ == "full")

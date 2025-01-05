@@ -342,11 +342,7 @@ void KheperaIVDiffusionMotion::ControlStep()
             packets[i].Data >> neighbor_vals[i].Confidence;
         }
 
-        // Compute social estimate only if there are neighbors (otherwise keep old social estimate so that informed estimate is still influenced)
-        if (neighbor_vals.size() > 0)
-        {
-            collective_perception_algo_ptr_->ComputeSocialEstimate(neighbor_vals);
-        }
+        collective_perception_algo_ptr_->ComputeSocialEstimate(neighbor_vals);
     }
 
     // Compute informed estimate only if there are new local or social estimates

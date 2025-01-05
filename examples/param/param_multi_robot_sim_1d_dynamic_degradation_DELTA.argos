@@ -79,17 +79,17 @@
                     hard_turn_angle_threshold="90"
                     soft_turn_angle_threshold="70"
                     no_turn_angle_threshold="10"
-                    max_speed="10"
-                /> <!-- speed in cm/s -->
+                    max_speed="10" /> <!-- speed in cm/s -->
                 <sensor_degradation_filter
-                    method="CHARLIE"
+                    method="DELTA"
                     period_ticks="1000"
                     observation_queue_size="0">
                     <params
                         pred_deg_model_B="-5e-5"
-                        pred_deg_variance_R="1e-4"
-                        init_mean_MAP="0.99"
-                        init_var_ELBO="0.001" /> <!-- CHARLIE filter specific parameters -->
+                        pred_deg_var_R="1e-4"
+                        init_mean="0.99"
+                        init_var="0.001"
+                        variant="bin" /> <!-- DELTA filter specific parameters -->
                 </sensor_degradation_filter>
             </params>
         </kheperaiv_diffusion_motion_controller>

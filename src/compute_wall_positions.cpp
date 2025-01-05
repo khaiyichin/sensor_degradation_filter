@@ -56,32 +56,36 @@ std::string GenerateArgosXMLOutput(const int &robots,
                                    const std::string &controller_id,
                                    const double &thickness,
                                    const double &height,
+                                   const double &length,
                                    const double &pos)
 {
     // Define an alias container (wall_north, (size_x, size_y, size_z), (pos_x, pos_y))
     using tuple_id_size_pos = std::tuple<std::string, std::array<double, 3>, std::array<double, 3>>;
 
-    // Compute the size of the wall
-    double wall_length = std::ceil(pos * 2);
-
     // Assign the size and coordinates for each wall
     tuple_id_size_pos w_north = tuple_id_size_pos{"wall_north",
-                                                  {wall_length, thickness, height},
+                                                  {length, thickness, height},
                                                   {0, pos, 0}};
     tuple_id_size_pos w_south = tuple_id_size_pos{"wall_south",
-                                                  {wall_length, thickness, height},
+                                                  {length, thickness, height},
                                                   {0, -pos, 0}};
     tuple_id_size_pos w_east = tuple_id_size_pos{"wall_east",
-                                                 {thickness, wall_length, height},
+                                                 {thickness, length, height},
                                                  {pos, 0, 0}};
     tuple_id_size_pos w_west = tuple_id_size_pos{"wall_west",
-                                                 {thickness, wall_length, height},
+                                                 {thickness, length, height},
                                                  {-pos, 0, 0}};
 
     std::array<tuple_id_size_pos, 4> walls = {w_north, w_south, w_east, w_west};
 
-    // Create XML output for the box nodes
+    // Create XML output for the arena node
     std::string output = "";
+
+    std::string arena_str = "<arena size=\"" + std::to_string(length) + ", " + std::to_string(length) + ", 1\" center=\"0, 0, 0.5\">\n\n";
+
+    output += arena_str;
+
+    // Create XML output for the box nodes
 
     for (auto &wall : walls)
     {
@@ -164,6 +168,7 @@ int main(int argc, char **argv)
 
     // Compute wall length with thickness considered
     double gen_wall_pos = ComputeGenericWallPosition(robots, density, comms_rad, thickness);
+    double wall_length = std::ceil(gen_wall_pos * 2);
 
     std::cout << std::endl;
     std::cout << "Based on the following specified inputs:" << std::endl;
@@ -171,14 +176,21 @@ int main(int argc, char **argv)
     std::cout << "\tswarm density\t\t\t= " << std::to_string(density) << std::endl;
     std::cout << "\tcommunication range radius\t= " << std::to_string(comms_rad) << " m" << std::endl;
     std::cout << "\twall thickness\t\t\t= " << std::to_string(thickness) << " m" << std::endl;
-    std::cout << "the corresponding wall coordinate is " << gen_wall_pos << " m." << std::endl;
+    std::cout << "the corresponding wall coordinate is " << gen_wall_pos << " m and each wall length is " << wall_length << " m." << std::endl;
 
     // Output XML output
     std::cout
         << std::endl
-        << "Configuration for the .argos file (copy and paste this inside the <arena> node):\n"
         << std::endl
-        << GenerateArgosXMLOutput(robots, comms_rad, controller_id, thickness, height, gen_wall_pos) << std::endl;
+        << "Configuration for the .argos file (copy and paste this to replace the <arena> node):\n"
+        << std::endl
+        << GenerateArgosXMLOutput(robots, comms_rad, controller_id, thickness, height, wall_length, gen_wall_pos) << std::endl;
+
+    std::cout << std::endl
+              << std::endl
+              << "NOTE: The <arena> node provided in the snippet above doesn't have a closing tag (</arena>)." << std::endl;
+    std::cout << "      This is so that you can add additional nodes after pasting the snippet." << std::endl;
+    std::cout << "      Remember to provide the closing tag in the .argos file." << std::endl;
 
     std::cout << std::endl
               << std::string(100, '*') << std::endl;
