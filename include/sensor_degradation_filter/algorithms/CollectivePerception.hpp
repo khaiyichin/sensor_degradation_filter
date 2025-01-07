@@ -94,7 +94,7 @@ public:
             NumBlackTilesSeen = std::accumulate(ObservationQueue.begin(), ObservationQueue.end(), 0);
         }
 
-        double ComputeWeightedAverageFillRatio(double latest_informed_estimate)
+        double ComputeWeightedAverageFillRatioReference(double latest_informed_estimate)
         {
             // Store the most recent informed estimate
             InformedEstimateHistory.push_back(latest_informed_estimate);
@@ -162,7 +162,7 @@ private:
 
     EstConfPair social_vals_ = EstConfPair(); ///< Social values
 
-    EstConfPair informed_vals_ = EstConfPair(); ///< Informed values
+    EstConfPair informed_vals_ = EstConfPair(0.5, ZERO_APPROX); ///< Informed values
 
     std::shared_ptr<Params> params_ptr_; ///< Pointer to parameters struct
 };

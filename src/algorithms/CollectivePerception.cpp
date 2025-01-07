@@ -38,7 +38,7 @@ void CollectivePerception::ComputeLocalEstimate(const double &sensor_acc_b, cons
     }
 
     // Modify confidence values to be non-zero to prevent numerical errors
-    if (local_vals_.Confidence == 0.0)
+    if (local_vals_.Confidence <= ZERO_APPROX)
     {
         local_vals_.Confidence = ZERO_APPROX;
     }
@@ -59,7 +59,7 @@ void CollectivePerception::ComputeSocialEstimate(const std::vector<EstConfPair> 
 
     // Assign the averages as social values
     social_vals_.X = sum.X / sum.Confidence;
-    social_vals_.Confidence = sum.Confidence;
+    social_vals_.Confidence = neighbor_vals.empty() ? 0.0 : sum.Confidence; // ensure no dummy values contribute to the informed estimates
 }
 
 void CollectivePerception::ComputeInformedEstimate()

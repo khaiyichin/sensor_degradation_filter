@@ -17,11 +17,16 @@ public:
         LaplaceApproximation = 1
     };
 
+    struct BinomialApproximationParams
+    {
+        double FillRatioReference = -1.0;
+    };
+
     struct LaplaceApproximationParams
     {
         double InternalUnitFactor = 1.0;
 
-        double FillRatio = -1.0;
+        double FillRatioReference = -1.0;
 
         double PredictionMean = 0.0;
 
@@ -83,6 +88,8 @@ private:
     DDPair bounds_internal_ = {-1.0, -1.0};
 
     TruncationParameters truncation_params_;
+
+    BinomialApproximationParams bin_params_;
 
     LaplaceApproximationParams lap_params_;
 

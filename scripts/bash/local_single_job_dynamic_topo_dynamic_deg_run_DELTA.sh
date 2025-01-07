@@ -49,25 +49,25 @@ NUM_FLAWED_ROBOTS=${NUM_ROBOTS} # set all robots to be flawed so that the filter
 DENSITY=0.1                     # desired swarm density
 WALL_POSITION=7.64781           # computed from desired density
 TRUE_DEG_DRIFT=-5e-5            # true sensor degradation drift coefficient (Wiener model)
-TRUE_DEG_DIFFUSION=1e-3         # true sensor degradation drift coefficient (Wiener model)
-LOWEST_DEGRADED_ACC_LVL=600     # lowest true accuracy value that the sensor will degrade to, in 1000s format
-LDAL_DEC=0.6                    # lowest true accuracy value in decimal format (bash doesn't support decimal math)
+TRUE_DEG_DIFFUSION=1e-4         # true sensor degradation drift coefficient (Wiener model)
+LOWEST_DEGRADED_ACC_LVL=500     # lowest true accuracy value that the sensor will degrade to, in 1000s format
+LDAL_DEC=0.5                    # lowest true accuracy value in decimal format (bash doesn't support decimal math)
 METHOD=DELTA                    # filter type
-OBS_Q_SIZE=200                  # observation queue size
+OBS_Q_SIZE=2000                 # observation queue size
 PRED_DEG_MODEL_B=-5e-5          # state prediction model B
-PRED_DEG_VAR_R=1e-6             # state prediction variance R
+PRED_DEG_VAR_R=1e-8             # state prediction variance R
 INIT_VAR=1e-2                   # initial variance for the filter (the initial mean will be the initial assumed sensor accuracy)
 LOWEST_ASSUMED_ACC_LVL=500      # lowest assumed accuracy value that the filter will estimate, in 1000s format
 LAAL_DEC=0.5                    # lowest assumed accuracy value in decimal format (bash doesn't support decimal math)
 
 # Parameters related to this job
 # (Fixed)
-TRUE_ACC=(999 750)
-TRUE_ACC_DEC=(0.999 0.75)
-ASSUMED_ACC=(999 750) # when flawed robots num is set to 0 this isn't applied
-ASSUMED_ACC_DEC=(0.999 0.75)
-TFR=(550 950)
-TFR_DEC=(0.55 0.95)
+TRUE_ACC=(999 800)
+TRUE_ACC_DEC=(0.999 0.8)
+ASSUMED_ACC=(999 0.8) # when flawed robots num is set to 0 this isn't applied
+ASSUMED_ACC_DEC=(0.999 0.8)
+TFR=(550 750 950)
+TFR_DEC=(0.55 0.75 0.95)
 SEEDS=(
     290436
     181119
@@ -102,15 +102,15 @@ SEEDS=(
 ) # the randomly pre-generated list of seeds (so that all the experiments are the same across the two variants)
 NUM_TICKS=20000
 SPEED=14.14
-COMMS_PERIOD=10
+COMMS_PERIOD=5
 VERBOSITY=none
 TICKS_PER_SECOND=10
 NUM_TILES=130
 WALL_THICKNESS=0.1
 ARENA_LEN=16
 DYNAMIC_DEGRADATION=true # dynamic sensor degradation
-MEAS_PERIOD=10
-FILTER_PERIOD=10
+MEAS_PERIOD=5
+FILTER_PERIOD=5
 VARIANTS=("bin" "lap")
 NUM_TRIALS=1                                            # must be 1 because the we want each trial to use a particular seed
 UNPROCESSED_DATA_FILE="flw${NUM_FLAWED_ROBOTS}_t0.json" # used to search the output data file
@@ -212,6 +212,8 @@ sed -i "s/<entity.*/<entity quantity=\"${NUM_ROBOTS}\" max_trials=\"100\" base_n
 
                     # Modify variant type
                     sed -i -E "/<sensor_degradation_filter/,/<\/sensor_degradation_filter>/ s/(variant=\")[^\"]*/\1${VARIANTS[l]}/" ${ACTUAL_ARGOSFILE}
+
+                    echo -e "===== Experiment: ASSUMED_ACC=${ASSUMED_ACC[i]}_TRUE_ACC=${TRUE_ACC[j]}_TFR=${TFR[k]}_VARIANT=${VARIANTS[l]} ====="
 
                     # Iterate over different seeds (each seed is for one trial)
                     for ((m = ${#SEEDS[@]} - 1; m >= 0; m--)); do

@@ -4,7 +4,7 @@
 
 void DynamicDegradationFilterDelta::LaplaceApproximationParams::Reset()
 {
-    FillRatio = -1.0;
+    FillRatioReference = -1.0;
     PredictionMean = 0.0;
     PredictionStdDev = -1.0;
     NumBlackTilesSeen = 0;
@@ -101,6 +101,9 @@ void DynamicDegradationFilterDelta::Init()
         throw std::invalid_argument("Unknown variant requested for the Delta filter; only \"bin\" and \"lap\" is allowed.");
     }
 
+    // Set the maximum number of past informed estimates to collect
+    collective_perception_algo_ptr_->GetParamsPtr()->MaxInformedEstimateHistoryLength = collective_perception_algo_ptr_->GetParamsPtr()->MaxObservationQueueSize;
+
     // Initialize common variables
     double init_mean, init_var;
 
@@ -123,9 +126,9 @@ void DynamicDegradationFilterDelta::Init()
 
     // Initialize measurement update parameters
     linearized_measurement_update_c_ = collective_perception_algo_ptr_->GetParamsPtr()->NumObservations *
-                                       (2 * collective_perception_algo_ptr_->GetInformedVals().X - 1) / internal_unit_factor_; // t * (2f - 1); needs to be updated every time step
+                                       (2 * bin_params_.FillRatioReference - 1) / internal_unit_factor_; // t * (2f - 1); needs to be updated every time step
     measurement_update_q_ = collective_perception_algo_ptr_->GetParamsPtr()->NumObservations *
-                            (std::pow(2 * params_ptr_->AssumedSensorAcc["b"] / internal_unit_factor_ - 1, 2) * (collective_perception_algo_ptr_->GetInformedVals().X - std::pow(collective_perception_algo_ptr_->GetInformedVals().X, 2) - 0.25) +
+                            (std::pow(2 * params_ptr_->AssumedSensorAcc["b"] / internal_unit_factor_ - 1, 2) * (bin_params_.FillRatioReference - std::pow(bin_params_.FillRatioReference, 2) - 0.25) +
                              0.25); // q = t * ( bf + (1-b)*(1-f)) * (1 - bf - (1-b)*(1-f)) )
                                     //   = t * ( (2*b - 1)^2 * (f - f^2 - 1/4) + 1/4 ); needs to be updated every time step
 
@@ -140,7 +143,7 @@ void DynamicDegradationFilterDelta::Init()
             // n = t * ( bf + (1-b)*(1-f) )
             //   = t * ( f * (2*b - 1) - b + 1 )
             return this->collective_perception_algo_ptr_->GetParamsPtr()->NumObservations *
-                   (this->collective_perception_algo_ptr_->GetInformedVals().X * (2 * pred_mean / this->internal_unit_factor_ - 1) - pred_mean / this->internal_unit_factor_ + 1);
+                   (this->bin_params_.FillRatioReference * (2 * pred_mean / this->internal_unit_factor_ - 1) - pred_mean / this->internal_unit_factor_ + 1);
         };
 
         break;
@@ -152,8 +155,8 @@ void DynamicDegradationFilterDelta::Init()
         {
             LaplaceApproximationParams *dist_params = static_cast<LaplaceApproximationParams *>(my_func_data);
 
-            double success_probability = x[0] / dist_params->InternalUnitFactor * dist_params->FillRatio +
-                                         (1 - x[0] / dist_params->InternalUnitFactor) * (1 - dist_params->FillRatio);
+            double success_probability = x[0] / dist_params->InternalUnitFactor * dist_params->FillRatioReference +
+                                         (1 - x[0] / dist_params->InternalUnitFactor) * (1 - dist_params->FillRatioReference);
 
             return gsl_ran_binomial_pdf(dist_params->NumBlackTilesSeen, success_probability, dist_params->NumObservations) *
                    gsl_ran_ugaussian_pdf((x[0] - dist_params->PredictionMean) / dist_params->PredictionStdDev);
@@ -191,12 +194,13 @@ void DynamicDegradationFilterDelta::Update()
         if (collective_perception_algo_ptr_->GetParamsPtr()->NumObservations * (prediction_.first / internal_unit_factor_) >= 5 &&
             collective_perception_algo_ptr_->GetParamsPtr()->NumObservations * (1 - prediction_.first / internal_unit_factor_) >= 5)
         {
+            bin_params_.FillRatioReference = collective_perception_algo_ptr_->GetParamsPtr()->ComputeWeightedAverageFillRatioReference(collective_perception_algo_ptr_->GetInformedVals().X);
 
             // Update the measurement jacobian and noise models
             linearized_measurement_update_c_ = collective_perception_algo_ptr_->GetParamsPtr()->NumObservations *
-                                               (2 * collective_perception_algo_ptr_->GetInformedVals().X - 1) / internal_unit_factor_;
+                                               (2 * bin_params_.FillRatioReference - 1) / internal_unit_factor_;
             measurement_update_q_ = collective_perception_algo_ptr_->GetParamsPtr()->NumObservations *
-                                    (std::pow(2 * prediction_.first / internal_unit_factor_ - 1, 2) * (collective_perception_algo_ptr_->GetInformedVals().X - std::pow(collective_perception_algo_ptr_->GetInformedVals().X, 2) - 0.25) +
+                                    (std::pow(2 * prediction_.first / internal_unit_factor_ - 1, 2) * (bin_params_.FillRatioReference - std::pow(bin_params_.FillRatioReference, 2) - 0.25) +
                                      0.25);
 
             // Run the base update step
@@ -211,7 +215,7 @@ void DynamicDegradationFilterDelta::Update()
 
     case Variant::LaplaceApproximation:
     {
-        lap_params_.FillRatio = collective_perception_algo_ptr_->GetInformedVals().X;
+        lap_params_.FillRatioReference = collective_perception_algo_ptr_->GetParamsPtr()->ComputeWeightedAverageFillRatioReference(collective_perception_algo_ptr_->GetInformedVals().X);
         lap_params_.PredictionMean = prediction_.first;
         lap_params_.PredictionStdDev = std::sqrt(prediction_.second);
         lap_params_.NumBlackTilesSeen = collective_perception_algo_ptr_->GetParamsPtr()->NumBlackTilesSeen;
@@ -245,14 +249,14 @@ void DynamicDegradationFilterDelta::Update()
 
         */
         // Find the variance of the approximateed Gaussian
-        double q = std::pow(update_.first + lap_params_.FillRatio - 2 * update_.first * lap_params_.FillRatio, 2) *
-                   std::pow(1 - lap_params_.FillRatio + update_.first * (-1 + 2 * lap_params_.FillRatio), 2);
+        double q = std::pow(update_.first + lap_params_.FillRatioReference - 2 * update_.first * lap_params_.FillRatioReference, 2) *
+                   std::pow(1 - lap_params_.FillRatioReference + update_.first * (-1 + 2 * lap_params_.FillRatioReference), 2);
 
         update_.second =
             (q * prediction_.second) /
             (q +
-             ((-1 + update_.first * (2 - 4 * lap_params_.FillRatio) + 2 * lap_params_.FillRatio) * lap_params_.NumBlackTilesSeen + std::pow(-1 + update_.first + lap_params_.FillRatio - 2 * update_.first * lap_params_.FillRatio, 2) * lap_params_.NumObservations) *
-                 std::pow(lap_params_.PredictionStdDev - 2 * lap_params_.FillRatio * lap_params_.PredictionStdDev, 2));
+             ((-1 + update_.first * (2 - 4 * lap_params_.FillRatioReference) + 2 * lap_params_.FillRatioReference) * lap_params_.NumBlackTilesSeen + std::pow(-1 + update_.first + lap_params_.FillRatioReference - 2 * update_.first * lap_params_.FillRatioReference, 2) * lap_params_.NumObservations) *
+                 std::pow(lap_params_.PredictionStdDev - 2 * lap_params_.FillRatioReference * lap_params_.PredictionStdDev, 2));
 
         break;
     }
@@ -272,7 +276,7 @@ void DynamicDegradationFilterDelta::Estimate()
     // Execute update step
     Update();
 
-    if (std::isnan(update_.first) || std::isnan(prediction_.second))
+    if (std::isnan(update_.first) || std::isnan(update_.second))
     {
         throw std::runtime_error("NaN values encountered in the updated values.");
     }

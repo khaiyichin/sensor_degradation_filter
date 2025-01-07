@@ -5,6 +5,7 @@
 #include "algorithms/StaticDegradationFilterBravo.hpp"
 #include "algorithms/DynamicDegradationFilterCharlie.hpp"
 #include "algorithms/DynamicDegradationFilterDelta.hpp"
+#include "algorithms/Oracle.hpp"
 
 KheperaIVDiffusionMotion::WheelTurningParams::WheelTurningParams() : TurnMech(TurningMechanism::NO_TURN),
                                                                      HardTurnOnAngleThreshold(ToRadians(CDegrees(90.0))),
@@ -88,7 +89,7 @@ void KheperaIVDiffusionMotion::Init(TConfigurationNode &xml_node)
         }
         catch (CARGoSException &ex)
         {
-            THROW_ARGOSEXCEPTION_NESTED("Error initializing the KheperaIV static degradation controller for robot \"" << GetId() << "\"", ex);
+            THROW_ARGOSEXCEPTION_NESTED("Error initializing the KheperaIV diffusion motion controller for robot \"" << GetId() << "\"", ex);
         }
     }
     catch (CARGoSException &ex)
@@ -206,9 +207,19 @@ void KheperaIVDiffusionMotion::Init(TConfigurationNode &xml_node)
                                                                                 {"variant", variant_str},
                                                                                 {"lowest_assumed_acc_lvl", std::to_string(lowest_assumed_acc_lvl)}};
     }
+    else if (method == "ORACLE")
+    {
+        // TODO: not using any filter; can be used to generate data for ground truth experiments (where robots know *exactly* what their true accuracy is)
+        // Or can be used to generate data for a static accuracy (whether or not the true accuracy is dynamic)
+
+        sensor_degradation_filter_ptr_ =
+            std::make_shared<Oracle>(collective_perception_algo_ptr_, ground_sensor_params_.ActualSensorAcc);
+        sensor_degradation_filter_ptr_->GetParamsPtr()->Method = "ORACLE";
+        sensor_degradation_filter_ptr_->GetParamsPtr()->FilterSpecificParams = {{"None", "None"}}; // no filter specific parameters for ALPHA
+    }
     else
     {
-        throw std::runtime_error("Unknown static degradation filter method, please double-check the XML file.");
+        throw std::runtime_error("Unknown sensor degradation filter method, please double-check the XML file.");
     }
 
     SensorDegradationFilter::Params &sensor_degradation_filter_params = *sensor_degradation_filter_ptr_->GetParamsPtr();
@@ -226,7 +237,7 @@ void KheperaIVDiffusionMotion::Init(TConfigurationNode &xml_node)
         `sensor_acc_*` from the XML file is our 'flawed' assumption of what the actual accuracy is.
 
         NOTE: in the non-simulated case, there should be no flawed robots, so the `num` attribute in the `flawed_robots`
-        node (within the `static_degradation` loop functions node) should be 0. Consequently, the `acc_b` and `acc_w`
+        node (within the `sensor_degradation` loop functions node) should be 0. Consequently, the `acc_b` and `acc_w`
         attributes do not apply (though you should set it to be equal to the `sensor_acc_*` values in the controller
         node to facilitate data processing).
     */

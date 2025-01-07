@@ -6,6 +6,7 @@ add_library(${PROJECT_NAME}_algorithms
     StaticDegradationFilterBravo.cpp
     DynamicDegradationFilterCharlie.cpp
     DynamicDegradationFilterDelta.cpp
+    Oracle.cpp
     ExtendedKalmanFilter.cpp
     ELBO.cpp
 )

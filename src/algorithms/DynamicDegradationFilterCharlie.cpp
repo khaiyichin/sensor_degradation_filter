@@ -172,7 +172,7 @@ void DynamicDegradationFilterCharlie::Estimate()
     // Collect informed estimate into weighted average queue (if an observation queue is used)
     if (collective_perception_algo_ptr_->GetParamsPtr()->MaxInformedEstimateHistoryLength > 1)
     {
-        distribution_params_ptr_->FillRatio = collective_perception_algo_ptr_->GetParamsPtr()->ComputeWeightedAverageFillRatio(collective_perception_algo_ptr_->GetInformedVals().X);
+        distribution_params_ptr_->FillRatio = collective_perception_algo_ptr_->GetParamsPtr()->ComputeWeightedAverageFillRatioReference(collective_perception_algo_ptr_->GetInformedVals().X);
     }
     else
     {
