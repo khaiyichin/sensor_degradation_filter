@@ -20,6 +20,8 @@ public:
 
         bool RunDegradationFilter = false;
 
+        bool UseWeightedAvgInformedEstimates = false;
+
         unsigned int FilterActivationPeriodTicks = 0;
 
         std::unordered_map<std::string, std::string> FilterSpecificParams;

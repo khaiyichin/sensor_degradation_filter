@@ -6,7 +6,7 @@
 #include "CollectivePerception.hpp"
 #include "ExtendedKalmanFilter.hpp"
 
-#define SENSOR_ACCURACY_INTERNAL_UNIT_FACTOR_DELTA 100.0 // the sensor accuracy is magnified internally to prevent vanishing products
+#define SENSOR_ACCURACY_INTERNAL_UNIT_FACTOR_DELTA 1.0 // the sensor accuracy is magnified internally to prevent vanishing products
 
 class DynamicDegradationFilterDelta : public ExtendedKalmanFilter
 {
@@ -20,6 +20,8 @@ public:
     struct BinomialApproximationParams
     {
         double FillRatioReference = -1.0;
+
+        int ThresholdCount = 5;
     };
 
     struct LaplaceApproximationParams
@@ -94,6 +96,8 @@ private:
     LaplaceApproximationParams lap_params_;
 
     Variant variant_;
+
+    double prev_assumed_acc_ = -1.0;
 
     double internal_unit_factor_ = 1.0; // internal units to prevent vanishing products
 

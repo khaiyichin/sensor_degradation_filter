@@ -179,6 +179,16 @@ protected:
     /* Sensor degradation filter */
     std::shared_ptr<SensorDegradationFilter> sensor_degradation_filter_ptr_;
 
+    Real assumed_degradation_drift_ = 0.0;
+
+    Real prev_assumed_acc_ = 0.0;
+
+    std::pair<Real, Real> averaged_deg_rates_and_fill_ratio_refs_ = {0.0, 0.0};
+
+    size_t window_size_ = 0;
+
+    std::deque<std::pair<Real, Real>> previous_degradation_rates_and_fill_ratio_references_;
+
     UInt64 tick_counter_ = 0;
 
     CRange<Real> standard_uniform_support_ = CRange<Real>(0.0, 1.0);

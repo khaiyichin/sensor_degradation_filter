@@ -101,9 +101,6 @@ void DynamicDegradationFilterDelta::Init()
         throw std::invalid_argument("Unknown variant requested for the Delta filter; only \"bin\" and \"lap\" is allowed.");
     }
 
-    // Set the maximum number of past informed estimates to collect
-    collective_perception_algo_ptr_->GetParamsPtr()->MaxInformedEstimateHistoryLength = collective_perception_algo_ptr_->GetParamsPtr()->MaxObservationQueueSize;
-
     // Initialize common variables
     double init_mean, init_var;
 
@@ -190,12 +187,15 @@ void DynamicDegradationFilterDelta::Update()
     {
     case Variant::BinomialApproximation:
     {
-        // Use np >= 5 && nq >= 5 rule to see if normal approximation holds
-        if (collective_perception_algo_ptr_->GetParamsPtr()->NumObservations * (prediction_.first / internal_unit_factor_) >= 5 &&
-            collective_perception_algo_ptr_->GetParamsPtr()->NumObservations * (1 - prediction_.first / internal_unit_factor_) >= 5)
-        {
-            bin_params_.FillRatioReference = collective_perception_algo_ptr_->GetParamsPtr()->ComputeWeightedAverageFillRatioReference(collective_perception_algo_ptr_->GetInformedVals().X);
+        bin_params_.FillRatioReference =
+            params_ptr_->UseWeightedAvgInformedEstimates
+                ? collective_perception_algo_ptr_->GetParamsPtr()->WeightedAverageInformedEstimate
+                : collective_perception_algo_ptr_->GetInformedVals().X;
 
+        // Use np >= 5 && nq >= 5 rule to see if normal approximation holds
+        if (collective_perception_algo_ptr_->GetParamsPtr()->NumObservations * (prediction_.first / internal_unit_factor_) >= bin_params_.ThresholdCount &&
+            collective_perception_algo_ptr_->GetParamsPtr()->NumObservations * (1 - prediction_.first / internal_unit_factor_) >= bin_params_.ThresholdCount)
+        {
             // Update the measurement jacobian and noise models
             linearized_measurement_update_c_ = collective_perception_algo_ptr_->GetParamsPtr()->NumObservations *
                                                (2 * bin_params_.FillRatioReference - 1) / internal_unit_factor_;
@@ -215,7 +215,7 @@ void DynamicDegradationFilterDelta::Update()
 
     case Variant::LaplaceApproximation:
     {
-        lap_params_.FillRatioReference = collective_perception_algo_ptr_->GetParamsPtr()->ComputeWeightedAverageFillRatioReference(collective_perception_algo_ptr_->GetInformedVals().X);
+        lap_params_.FillRatioReference = collective_perception_algo_ptr_->GetParamsPtr()->WeightedAverageInformedEstimate;
         lap_params_.PredictionMean = prediction_.first;
         lap_params_.PredictionStdDev = std::sqrt(prediction_.second);
         lap_params_.NumBlackTilesSeen = collective_perception_algo_ptr_->GetParamsPtr()->NumBlackTilesSeen;
@@ -284,17 +284,35 @@ void DynamicDegradationFilterDelta::Estimate()
     // Find the constrained version of the sensor accuracy; the constrained values are not fed back into the filter
     ComputeConstrainedSensorAccuracy();
 
-    // Update assumed sensor accuracy (should be converted OUT of internal units)
-    params_ptr_->AssumedSensorAcc["b"] = (std::sqrt(update_.second) * truncation_params_.TransformedStateEstimate.first + update_.first) / internal_unit_factor_;
+    // Update assumed sensor accuracy only if it's out of bounds (should be converted OUT of internal units)
+    if (update_.first < bounds_original_.first || update_.first > bounds_original_.second)
+    {
+        params_ptr_->AssumedSensorAcc["b"] = (std::sqrt(update_.second) * truncation_params_.TransformedStateEstimate.first + update_.first) / internal_unit_factor_;
 
-    // Prevent the assumed sensor accuracy from going outside of bounds (due to rounding errors)
-    if (params_ptr_->AssumedSensorAcc["b"] > bounds_original_.second)
-    {
-        params_ptr_->AssumedSensorAcc["b"] = bounds_original_.second;
+        // Prevent the assumed sensor accuracy from going outside of bounds (due to rounding errors)
+        if (params_ptr_->AssumedSensorAcc["b"] > bounds_original_.second)
+        {
+            params_ptr_->AssumedSensorAcc["b"] = bounds_original_.second;
+        }
+        else if (params_ptr_->AssumedSensorAcc["b"] < bounds_original_.first)
+        {
+            params_ptr_->AssumedSensorAcc["b"] = bounds_original_.first;
+        }
     }
-    else if (params_ptr_->AssumedSensorAcc["b"] < bounds_original_.first)
+    else
     {
-        params_ptr_->AssumedSensorAcc["b"] = bounds_original_.first;
+        params_ptr_->AssumedSensorAcc["b"] = update_.first;
+    }
+
+    // Apply exponential smoothing
+    if (prev_assumed_acc_ == -1.0)
+    {
+        prev_assumed_acc_ = params_ptr_->AssumedSensorAcc["b"];
+    }
+    else
+    {
+        params_ptr_->AssumedSensorAcc["b"] = exponential_smoothing_factor_ * params_ptr_->AssumedSensorAcc["b"] + (1 - exponential_smoothing_factor_) * prev_assumed_acc_;
+        prev_assumed_acc_ = params_ptr_->AssumedSensorAcc["b"];
     }
 
     params_ptr_->AssumedSensorAcc["w"] = params_ptr_->AssumedSensorAcc["b"]; // black tile accuracy is equal to white tile accuracy

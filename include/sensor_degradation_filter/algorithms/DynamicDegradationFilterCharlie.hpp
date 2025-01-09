@@ -51,6 +51,8 @@ private:
 
     std::pair<std::vector<double>, double> ELBO_outcome_ = {{-1.0}, -1.0};
 
+    double prev_assumed_acc_ = -1.0;
+
     const std::vector<double> empty_vec_double_ = {}; // dummy variable; used to pass into the predict function which doesn't require additional arguments
 };
 

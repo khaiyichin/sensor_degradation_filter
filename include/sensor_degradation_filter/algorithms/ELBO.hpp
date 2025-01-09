@@ -89,7 +89,7 @@ public:
 private:
     size_t workspace_size_;
 
-    gsl_integration_workspace *workspace_;
+    gsl_integration_cquad_workspace *workspace_;
 
     gsl_function integrand_;
 

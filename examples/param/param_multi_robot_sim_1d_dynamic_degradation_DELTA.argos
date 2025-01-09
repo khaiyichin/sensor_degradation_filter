@@ -67,7 +67,7 @@
             <params>
                 <diffusion go_straight_angle_range="-5:5" delta="0.1" />
                 <ground_sensor
-                    period_ticks="1"
+                    period_ticks="5"
                     sensor_acc_b="0.95"
                     sensor_acc_w="0.95"
                     sim="true"
@@ -83,8 +83,10 @@
                     max_speed="10" /> <!-- speed in cm/s -->
                 <sensor_degradation_filter
                     method="DELTA"
-                    period_ticks="1000"
-                    observation_queue_size="0">
+                    period_ticks="5"
+                    observation_queue_size="1000"
+                    dynamic_observation_queue="true"
+                    use_weighted_avg_informed_est="true">
                     <params
                         pred_deg_model_B="-5e-5"
                         pred_deg_var_R="1e-4"

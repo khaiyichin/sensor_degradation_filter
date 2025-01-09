@@ -19,5 +19,9 @@
         var_pred[k+1] = var_pos[k] + R; \\ predicted variance with assumed diffusion variance of R
         ```
     - The observations `n` can be kept in a queue (since it's non-stationary). What this means is that the past `N` observations are kept in this queue. If an observation queue is used then the fill ratio reference used by the binomial likelihood (_i.e._, the informed estimate) is computed as a weighted average of past `N` informed estimates.
+    - The predicted estimates are checked and modified so that they stay within the bounds before being fed into the update step, after which bounds checking is applied again.
 
 - The `tests/test_elbo_class.cpp` script is provided to test the GSL integration functionality and NLopt optimization functionality.
+
+- The `DynamicDegradationDelta` class is a method that uses the ExtendedKalmanFilter to estimate the sensor accuracy and then apply the truncation based on the linear inequality constraints _only_ if the estimates violate the constraints. This highlights the main distinction from Charlie: the estimates are not modified within the EKF but after estimates are done. The modified estimates are also _not_ fed back into the filter here.
+    - The terms "window size" and "queue size" _do not_ mean the same thing. The window size is used to find the moving average value of the degradation rate (so that we get dynamic observation queue sizes; this applies to the Charlie filter as well). The queue size strictly applies to the storage of observations (and past informed estimates, if requested).

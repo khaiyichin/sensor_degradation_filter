@@ -56,12 +56,12 @@ void DynamicDegradationFilterCharlie::Init()
     MAP_optimizer_.set_max_objective(nlopt_wrapped_MAP_fcn, &elbo_);
     MAP_optimizer_.set_lower_bounds(limits.first);
     MAP_optimizer_.set_upper_bounds(limits.second);
-    MAP_optimizer_.set_xtol_abs(1e-9);
+    MAP_optimizer_.set_xtol_abs(1e-12);
 
     ELBO_optimizer_.set_max_objective(nlopt_wrapped_ELBO_fcn, &elbo_);
-    ELBO_optimizer_.set_lower_bounds(std::sqrt(5e-4) * distribution_params_ptr_->SensorAccuracyInternalFactor); // smallest std dev value (any smaller the ELBO evaluation will encounter nan/inf values)
-    ELBO_optimizer_.set_upper_bounds(HUGE_VAL);                                                                 // HUGE_VAL is basically infinity
-    ELBO_optimizer_.set_xtol_abs(1e-9);
+    ELBO_optimizer_.set_lower_bounds(1e-4 * distribution_params_ptr_->SensorAccuracyInternalFactor); // smallest std dev value (any smaller the ELBO evaluation will encounter nan/inf values)
+    ELBO_optimizer_.set_upper_bounds(HUGE_VAL);                                                      // HUGE_VAL is basically infinity
+    ELBO_optimizer_.set_xtol_abs(1e-12);
 
     // Initialize the prior (initial guess)
     double init_mean, init_std_dev;
@@ -117,8 +117,6 @@ void DynamicDegradationFilterCharlie::Predict()
     distribution_params_ptr_->PredictionMean = prediction_.first;
     distribution_params_ptr_->PredictionStdDev = std::sqrt(prediction_.second);
 
-    // std::cout << "debug distribution_params_ptr_->PredictionMean=" << distribution_params_ptr_->PredictionMean << " lowerbound=" << distribution_params_ptr_->PredictionLowerBound << std::endl;
-
     // Truncate the predicted mean if outside bounds
     if (distribution_params_ptr_->PredictionMean > distribution_params_ptr_->PredictionUpperBound)
     {
@@ -172,7 +170,7 @@ void DynamicDegradationFilterCharlie::Estimate()
     // Collect informed estimate into weighted average queue (if an observation queue is used)
     if (collective_perception_algo_ptr_->GetParamsPtr()->MaxInformedEstimateHistoryLength > 1)
     {
-        distribution_params_ptr_->FillRatio = collective_perception_algo_ptr_->GetParamsPtr()->ComputeWeightedAverageFillRatioReference(collective_perception_algo_ptr_->GetInformedVals().X);
+        distribution_params_ptr_->FillRatio = collective_perception_algo_ptr_->GetParamsPtr()->WeightedAverageInformedEstimate;
     }
     else
     {
@@ -185,7 +183,16 @@ void DynamicDegradationFilterCharlie::Estimate()
     // Execute update step
     Update();
 
-    // Update assumed sensor accuracy (should be converted OUT of internal units)
-    params_ptr_->AssumedSensorAcc["b"] = update_.first / this->distribution_params_ptr_->SensorAccuracyInternalFactor;
-    params_ptr_->AssumedSensorAcc["w"] = update_.first / this->distribution_params_ptr_->SensorAccuracyInternalFactor;
+    // Apply exponential smoothing
+    if (prev_assumed_acc_ == -1.0)
+    {
+        prev_assumed_acc_ = update_.first / this->distribution_params_ptr_->SensorAccuracyInternalFactor;
+    }
+    else
+    {
+        params_ptr_->AssumedSensorAcc["b"] = exponential_smoothing_factor_ * update_.first / this->distribution_params_ptr_->SensorAccuracyInternalFactor + (1 - exponential_smoothing_factor_) * prev_assumed_acc_;
+        prev_assumed_acc_ = params_ptr_->AssumedSensorAcc["b"];
+    }
+
+    params_ptr_->AssumedSensorAcc["w"] = params_ptr_->AssumedSensorAcc["b"]; // black tile accuracy is equal to white tile accuracy
 }

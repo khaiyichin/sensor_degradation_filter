@@ -59,9 +59,7 @@ double observation_likelihood_binomial_pdf(double x, void *params)
  */
 double joint_density_fcn(double x, void *params)
 {
-    double joint_value = observation_likelihood_binomial_pdf(x, params) * prediction_trunc_normal_pdf(x, params);
-
-    return joint_value <= 0.0 ? 1e-9 : joint_value; // ensure that a non-zero value is returned
+    return observation_likelihood_binomial_pdf(x, params) * prediction_trunc_normal_pdf(x, params);
 }
 
 /**
@@ -81,7 +79,7 @@ SensorAccuracyELBO::SensorAccuracyELBO(double a, double b, double internal_units
       integration_parameters_ptr_(std::make_shared<SensorAccuracyDistributionParameters>()),
       integration_limits_(a * internal_units_factor, b * internal_units_factor)
 {
-    workspace_ = gsl_integration_workspace_alloc(workspace_size_);
+    workspace_ = gsl_integration_cquad_workspace_alloc(workspace_size_);
     integrand_.function = &ELBO_integrand;
     integrand_.params = integration_parameters_ptr_.get(); // pass raw pointer to `params`
 
@@ -91,7 +89,7 @@ SensorAccuracyELBO::SensorAccuracyELBO(double a, double b, double internal_units
 
 SensorAccuracyELBO::~SensorAccuracyELBO()
 {
-    gsl_integration_workspace_free(workspace_);
+    gsl_integration_cquad_workspace_free(workspace_);
 }
 
 void SensorAccuracyELBO::Reset()
@@ -109,17 +107,14 @@ void SensorAccuracyELBO::ComputePredictionNormalizationConstant()
 
 void SensorAccuracyELBO::ComputeELBO()
 {
-    // Compute normalization constant for the prediction model
     ComputePredictionNormalizationConstant();
 
-    // Integrate ELBO
-    gsl_integration_qags(&integrand_,
-                         integration_limits_.first,
-                         integration_limits_.second,
-                         0,
-                         1e-7,
-                         workspace_size_,
-                         workspace_,
-                         &integration_outputs_.first,
-                         &integration_outputs_.second);
+    gsl_integration_cquad(&integrand_,
+                          integration_limits_.first,
+                          integration_limits_.second,
+                          1e-10,
+                          1e-6,
+                          workspace_,
+                          &integration_outputs_.first,
+                          NULL, NULL);
 }

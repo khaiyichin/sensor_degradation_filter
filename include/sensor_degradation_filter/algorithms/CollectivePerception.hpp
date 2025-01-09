@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <memory>
 #include <deque>
+#include <stdexcept>
 
 #define ZERO_APPROX 1.0e-6
 
@@ -75,26 +76,41 @@ public:
             InformedEstimateHistory.clear();
         }
 
-        void AddToQueue(unsigned int obs)
+        void AddToQueue(unsigned int obs, size_t dynamic_queue_size = 0)
         {
+            /*
+                The way this works is that the actual queue (ObservationQueue) that stores observation grows in size until MaxObservationQueueSize.
+                If a dynamic queue is desired, the dynamic queue size is used to accumulate the observations from ObservationQueue without
+                shrinking or growing ObservationQueue.
+            */
+
             ObservationQueue.push_back(obs);
 
-            // Adjust queue items to a fixed queue size
+            // Adjust queue items to the maximum queue size
             if (ObservationQueue.size() > MaxObservationQueueSize)
             {
                 ObservationQueue.pop_front();
-                NumObservations = MaxObservationQueueSize;
+            }
+
+            // Adjust the number of black tiles seen depending on whether a dynamic queue is used
+            if (UseDynamicObservationQueue && dynamic_queue_size < ObservationQueue.size())
+            {
+                if (dynamic_queue_size == 0)
+                {
+                    throw std::runtime_error("Dynamic queue size cannot be zero!");
+                }
+                NumBlackTilesSeen = std::accumulate(ObservationQueue.end() - dynamic_queue_size, ObservationQueue.end(), 0);
+                NumObservations = dynamic_queue_size;
             }
             else
             {
+                // Calculate number of black tiles seen
+                NumBlackTilesSeen = std::accumulate(ObservationQueue.begin(), ObservationQueue.end(), 0);
                 NumObservations = ObservationQueue.size();
             }
-
-            // Calculate number of black tiles seen
-            NumBlackTilesSeen = std::accumulate(ObservationQueue.begin(), ObservationQueue.end(), 0);
         }
 
-        double ComputeWeightedAverageFillRatioReference(double latest_informed_estimate)
+        void ComputeWeightedAverageFillRatioReference(double latest_informed_estimate)
         {
             // Store the most recent informed estimate
             InformedEstimateHistory.push_back(latest_informed_estimate);
@@ -106,14 +122,14 @@ public:
 
             // Compute the weighted average (weighing older estimates as heavier)
             double numerator = 0.0;
-            double denominator = InformedEstimateHistory.size() * (InformedEstimateHistory.size() + 1) / 2.0;
+            double denominator = InformedEstimateHistory.size() * (InformedEstimateHistory.size() + 1.0) / 2.0;
 
             for (size_t i = InformedEstimateHistory.size(); i > 0; --i)
             {
                 numerator += i * InformedEstimateHistory[InformedEstimateHistory.size() - i];
             }
 
-            return numerator / denominator;
+            WeightedAverageInformedEstimate = numerator / denominator;
         }
 
         unsigned int NumBlackTilesSeen = 0;
@@ -131,6 +147,12 @@ public:
         std::vector<EstConfPair> MostRecentNeighborEstimates;
 
         bool UseObservationQueue = false;
+
+        bool UseDynamicObservationQueue = false;
+
+        double WeightedAverageInformedEstimate = 0.0;
+
+        double PastWeightedAverageInformedEstimate = 0.0;
     };
 
     CollectivePerception() : params_ptr_(std::make_shared<Params>()) {}

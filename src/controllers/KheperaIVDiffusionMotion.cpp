@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <argos3/core/utility/logging/argos_log.h>
 
 #include "controllers/KheperaIVDiffusionMotion.hpp"
 #include "algorithms/StaticDegradationFilterAlpha.hpp"
@@ -248,15 +249,64 @@ void KheperaIVDiffusionMotion::Init(TConfigurationNode &xml_node)
 
     GetNodeAttribute(sensor_degradation_filter_node, "period_ticks", sensor_degradation_filter_params.FilterActivationPeriodTicks);
 
+    // Check to see if the weighted average informed estimate is used for the fill ratio reference
+    bool use_weighted_avg_informed_est;
+
+    GetNodeAttributeOrDefault(sensor_degradation_filter_node, "use_weighted_avg_informed_est", use_weighted_avg_informed_est, false);
+
     // Check whether to use an observation queue
     UInt32 obs_queue_size;
 
     GetNodeAttribute(sensor_degradation_filter_node, "observation_queue_size", obs_queue_size);
 
+    // Check to see if observation queue is desired
     if (obs_queue_size != 0)
     {
         collective_perception_algo_ptr_->GetParamsPtr()->UseObservationQueue = true;
         collective_perception_algo_ptr_->GetParamsPtr()->MaxObservationQueueSize = obs_queue_size;
+
+        bool dynamic_observation_queue;
+
+        // Check to see if a dynamic-sized observation queue is desired
+        GetNodeAttributeOrDefault(sensor_degradation_filter_node, "dynamic_observation_queue", dynamic_observation_queue, false);
+
+        if (dynamic_observation_queue)
+        {
+            collective_perception_algo_ptr_->GetParamsPtr()->UseDynamicObservationQueue = dynamic_observation_queue;
+
+            if (sensor_degradation_filter_params.FilterSpecificParams.find("pred_deg_model_B") != sensor_degradation_filter_params.FilterSpecificParams.end())
+            {
+                // Compute the fixed window size to be used when averaging the estimated sensor accuracy degradation rate and the estimated fill ratio
+                assumed_degradation_drift_ = std::stod(sensor_degradation_filter_params.FilterSpecificParams["pred_deg_model_B"]);
+
+                window_size_ = static_cast<size_t>(std::ceil(0.05 / (sensor_degradation_filter_params.FilterActivationPeriodTicks * std::abs(assumed_degradation_drift_))));
+            }
+            else
+            {
+                LOG << "Cannot find assumed degradation drift; perhaps filter type isn't for dynamic sensor degradation?" << std::endl;
+                LOG << "Setting window size to be 10 * filter activation period ticks" << std::endl;
+                window_size_ = 10 * sensor_degradation_filter_ptr_->GetParamsPtr()->FilterActivationPeriodTicks;
+            }
+        }
+
+        // Set the boolean for using weighted average informed estimates which is only possible because observation queue size > 0
+        sensor_degradation_filter_params.UseWeightedAvgInformedEstimates = use_weighted_avg_informed_est;
+
+        collective_perception_algo_ptr_->GetParamsPtr()->MaxInformedEstimateHistoryLength =
+            sensor_degradation_filter_ptr_->GetParamsPtr()->UseWeightedAvgInformedEstimates
+                ? collective_perception_algo_ptr_->GetParamsPtr()->MaxObservationQueueSize
+                : 1;
+    }
+    else
+    {
+        collective_perception_algo_ptr_->GetParamsPtr()->UseObservationQueue = false;
+
+        // Warn that it's not possible to use the weighted average informed estimate because there isn't an observation queue
+        if (use_weighted_avg_informed_est)
+        {
+            std::cout << "Cannot use weighted average informed estimate because observation queue isn't used." << std::endl;
+            sensor_degradation_filter_params.UseWeightedAvgInformedEstimates = false;
+        }
     }
 
     /* Create a random number generator. We use the 'argos' category so
@@ -308,7 +358,8 @@ std::vector<Real> KheperaIVDiffusionMotion::GetData() const
             sensor_degradation_filter_ptr_->GetParamsPtr()->AssumedSensorAcc.at("b"),
             sensor_degradation_filter_ptr_->GetParamsPtr()->AssumedSensorAcc.at("w"),
             ground_sensor_params_.ActualSensorAcc.at("b"),
-            ground_sensor_params_.ActualSensorAcc.at("w")};
+            ground_sensor_params_.ActualSensorAcc.at("w"),
+            collective_perception_algo_ptr_->GetParamsPtr()->WeightedAverageInformedEstimate};
 }
 
 void KheperaIVDiffusionMotion::SetLEDs(const CColor &color)
@@ -320,20 +371,70 @@ void KheperaIVDiffusionMotion::ControlStep()
 {
     ++tick_counter_;
 
+    if (tick_counter_ == window_size_ * sensor_degradation_filter_ptr_->GetParamsPtr()->FilterActivationPeriodTicks)
+    {
+        // Store the assumed accuracy for the very first step (so that we actually have the accuracy from one time step before in the later time steps)
+        prev_assumed_acc_ = sensor_degradation_filter_ptr_->GetParamsPtr()->AssumedSensorAcc["b"]; // update with the latest assumed accuracy
+    }
+
     // Move robot
     SetWheelSpeedsFromVector(ComputeDiffusionVector());
 
     // Collect ground measurement and compute local estimate
     if (tick_counter_ % ground_sensor_params_.GroundMeasurementPeriodTicks == 0)
     {
+        // Check if an observation queue is used
         if (!collective_perception_algo_ptr_->GetParamsPtr()->UseObservationQueue)
         {
             collective_perception_algo_ptr_->GetParamsPtr()->NumBlackTilesSeen += 1 - ObserveTileColor(); // the collective perception algorithm flips the black and white tiles
             ++collective_perception_algo_ptr_->GetParamsPtr()->NumObservations;
         }
-        else
+        else // use an observation queue
         {
-            collective_perception_algo_ptr_->GetParamsPtr()->AddToQueue(1 - ObserveTileColor()); // add to fixed size observation queue
+            size_t dynamic_queue_size = collective_perception_algo_ptr_->GetParamsPtr()->MaxObservationQueueSize;
+
+            // Check to see if dynamic queue size is used
+            if (collective_perception_algo_ptr_->GetParamsPtr()->UseDynamicObservationQueue && tick_counter_ > window_size_ * sensor_degradation_filter_ptr_->GetParamsPtr()->FilterActivationPeriodTicks)
+            {
+                // Collect the current degradation rate and fill ratio reference (i.e., the informed estimate)
+                previous_degradation_rates_and_fill_ratio_references_.push_back(std::pair(sensor_degradation_filter_ptr_->GetParamsPtr()->AssumedSensorAcc["b"] - prev_assumed_acc_,
+                                                                                          collective_perception_algo_ptr_->GetInformedVals().X));
+
+                // Maintain the fixed window size
+                if (previous_degradation_rates_and_fill_ratio_references_.size() > window_size_)
+                {
+                    previous_degradation_rates_and_fill_ratio_references_.pop_front(); // ensure the queue stays true to the desired window size
+                }
+                prev_assumed_acc_ = sensor_degradation_filter_ptr_->GetParamsPtr()->AssumedSensorAcc["b"]; // update with the latest assumed accuracy
+
+                // Compute the average values
+                averaged_deg_rates_and_fill_ratio_refs_ = std::reduce(previous_degradation_rates_and_fill_ratio_references_.begin(),
+                                                                      previous_degradation_rates_and_fill_ratio_references_.end(),
+                                                                      std::pair<Real, Real>(0.0, 0.0),
+                                                                      [](std::pair<Real, Real> left, std::pair<Real, Real> right)
+                                                                      {
+                                                                          return std::pair<Real, Real>(left.first + right.first, left.second + right.second);
+                                                                      });
+
+                averaged_deg_rates_and_fill_ratio_refs_ = {averaged_deg_rates_and_fill_ratio_refs_.first / previous_degradation_rates_and_fill_ratio_references_.size(),
+                                                           sensor_degradation_filter_ptr_->GetParamsPtr()->UseWeightedAvgInformedEstimates
+                                                               ? collective_perception_algo_ptr_->GetParamsPtr()->WeightedAverageInformedEstimate
+                                                               : averaged_deg_rates_and_fill_ratio_refs_.second / previous_degradation_rates_and_fill_ratio_references_.size()};
+
+                // Calculate dynamic queue size from the averaged values
+                if (std::abs(averaged_deg_rates_and_fill_ratio_refs_.first) < ZERO_APPROX)
+                {
+                    dynamic_queue_size = collective_perception_algo_ptr_->GetParamsPtr()->MaxObservationQueueSize;
+                }
+                else
+                {
+                    dynamic_queue_size = static_cast<size_t>(std::ceil(0.25 /
+                                                                       std::abs(sensor_degradation_filter_ptr_->GetParamsPtr()->FilterActivationPeriodTicks *
+                                                                                (2.0 * averaged_deg_rates_and_fill_ratio_refs_.second - 1.0) *
+                                                                                averaged_deg_rates_and_fill_ratio_refs_.first)));
+                }
+            }
+            collective_perception_algo_ptr_->GetParamsPtr()->AddToQueue(1 - ObserveTileColor(), dynamic_queue_size); // add to observation queue
         }
         collective_perception_algo_ptr_->ComputeLocalEstimate(sensor_degradation_filter_ptr_->GetParamsPtr()->AssumedSensorAcc.at("b"),
                                                               sensor_degradation_filter_ptr_->GetParamsPtr()->AssumedSensorAcc.at("w"));
@@ -384,6 +485,12 @@ void KheperaIVDiffusionMotion::ControlStep()
     if (tick_counter_ % ground_sensor_params_.GroundMeasurementPeriodTicks == 0 || tick_counter_ % comms_params_.CommsPeriodTicks == 0)
     {
         collective_perception_algo_ptr_->ComputeInformedEstimate();
+
+        // Compute the weighted average informed estimates
+        if (sensor_degradation_filter_ptr_->GetParamsPtr()->UseWeightedAvgInformedEstimates)
+        {
+            collective_perception_algo_ptr_->GetParamsPtr()->ComputeWeightedAverageFillRatioReference(collective_perception_algo_ptr_->GetInformedVals().X);
+        }
     }
 
     // Run degradation filter
@@ -391,7 +498,7 @@ void KheperaIVDiffusionMotion::ControlStep()
     {
         sensor_degradation_filter_ptr_->Estimate();
 
-        // update sensor accuracies
+        // Update sensor accuracies
         UpdateAssumedSensorAcc(sensor_degradation_filter_ptr_->GetAccuracyEstimates());
     }
 

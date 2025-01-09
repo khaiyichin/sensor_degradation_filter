@@ -35,6 +35,8 @@ protected:
 
     std::function<double(double, const std::vector<double> &)> nonlinear_measurement_update_function_;
 
+    double exponential_smoothing_factor_ = 0.005;
+
     double kalman_gain_ = 0.0; // Kalman gain
 
     double linearized_state_prediction_a_ = 0.0; // linearized coefficient for the state_prediction model (default value: zero)

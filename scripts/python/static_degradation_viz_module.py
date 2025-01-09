@@ -180,7 +180,8 @@ DATA_KEYWORD_TO_DATA_COLUMN_INDEX_DICT = {
     "assumed_accuracy_b": 8,
     "assumed_accuracy_w": 9,
     "true_accuracy_b": 10,
-    "true_accuracy_w": 11
+    "true_accuracy_w": 11,
+    "weighted_avg_informed_estimate": 12,
 }
 
 class StaticDegradationJsonDataSpecific(StaticDegradationJsonData):
