@@ -1,15 +1,28 @@
 #!/usr/bin/env bash
 
-# This script is modeled after the `sbatch_dynamic_topo_static_deg_run.sh` script and is meant to be run on a local workstation
+# This script is modeled after the `sbatch_dynamic_topo_static_deg_run.sh` script and is meant to be executed by a high-level
+# script as an `sbatch` command. It should be copied by said script to the intended working directory before execution. The
+# high-level script will modify the variables for
 # (not on an HPC). Here we run the two DELTA variants using the same random seed; each trial is run sequentially. The experiments
 # are only run across one set of
-#       `ground_sensor` parameters (`period_ticks`, `sensor_acc_*`, `true_deg_*_coeff`)
+#       `ground_sensor` parameters except true accuracy (`period_ticks`, `sensor_acc_*`, `true_deg_*_coeff`)
 #       `sensor_degradation_filter` parameters (except `variant`, where both "bin" and "lap" are run)
 #       `loop_functions` parameters (`num_trials`, `arena_tiles`, `target_fill_ratio`, `flawed_robots`, etc.)
 #       swarm density (`arena` parameters)
 
+# The script works by first modifying a template parameter file ${ARGOSFILE}, then making a copy of it with a specific
+# name ${PARAM_FILE} in the new working directory WORKDIR=${LOCALDIR}/${MYUSER}/${THISJOB}/${SLURM_JOB_ID}. The actual
+# working directory starts in the folder the high-level script starts this job in, then it moves to ${WORKDIR} to run the
+# experiments. Once complete, all the created files in ${WORKDIR} will be copied over back to the original directory
+# where this job script was started in.
+
 # Stop execution after any error
 set -e
+
+# Cleanup function to be executed upon exit, for any reason
+function cleanup() {
+    rm -rf $WORKDIR
+}
 
 # Trap errors and log the line number
 trap 'echo "${LINENO}: ${BASH_COMMAND}"; exit 1' ERR
@@ -20,11 +33,20 @@ trap 'echo "${LINENO}: ${BASH_COMMAND}"; exit 1' ERR
 #
 ########################################
 
+# Your user name
+# (Don't change this)
+MYUSER=$(whoami)
+
+# Path of the local storage on a node
+# Use this to avoid sending data streams over the network
+# (Don't change this)
+LOCALDIR=/local
+
 # ARGoS environment variables
 # (Don't change this)
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/research/sensor-degradation-filter/build_argos/src
-export ARGOS_PLUGIN_PATH=$ARGOS_PLUGIN_PATH:$HOME/research/sensor-degradation-filter/build_argos/src
-export PATH=$PATH:$HOME/research/sensor-degradation-filter/build_argos/src
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/sensor-degradation-filter/build_argos/src
+export ARGOS_PLUGIN_PATH=$ARGOS_PLUGIN_PATH:$HOME/sensor-degradation-filter/build_argos/src
+export PATH=$PATH:$HOME/sensor-degradation-filter/build_argos/src
 
 # Folder where you want your data to be stored
 # (Adapt this to your needs)
@@ -119,6 +141,26 @@ UNPROCESSED_DATA_FILE="flw${NUM_FLAWED_ROBOTS}_t0.json" # used to search the out
 
 ########################################
 #
+# Job directory
+#
+########################################
+
+THISJOB=dynamic_topo_dynamic_deg_DELTA
+
+# Job working directory
+# (Don't change this)
+WORKDIR=${LOCALDIR}/${MYUSER}/${THISJOB}/${SLURM_JOB_ID}
+
+# Create work dir from scratch, enter it
+# (Don't change this)
+rm -rf $WORKDIR && mkdir -p $WORKDIR && cd $WORKDIR
+
+# Make sure you cleanup upon exit
+# (Don't change this)
+trap cleanup EXIT SIGINT SIGTERM
+
+########################################
+#
 # Actual job logic
 #
 ########################################
@@ -203,9 +245,6 @@ sed -i "s/<entity.*/<entity quantity=\"${NUM_ROBOTS}\" max_trials=\"100\" base_n
                 JSON_FOLDER="${CURR_DATETIME}_t${#SEEDS[@]}_s${NUM_TICKS}_tfr${TFR[k]}_flw${NUM_FLAWED_ROBOTS}_flwb${ASSUMED_ACC[i]}_corb${TRUE_ACC[j]}_drift${TRUE_DEG_DRIFT}_diff${TRUE_DEG_DIFFUSION}_ldal${LOWEST_DEGRADED_ACC_LVL}_modelb${PRED_DEG_MODEL_B}_modelr${PRED_DEG_VAR_R}_laal${LOWEST_ASSUMED_ACC_LVL}_commsp${COMMSP}_filtp${FILTER_PERIOD}_corfilt${CORFILT}"
                 mkdir -p data/${JSON_FOLDER}
 
-                # Configure output path
-                sed -i -E "/<loop_functions/,/<\/loop_functions>/ s/(path folder=\")[^\"]*/\1data\/${JSON_FOLDER}/" ${ACTUAL_ARGOSFILE}
-
                 # Define configuration file name
                 PARAM_FILE=tfr${TFR[k]}_flw${NUM_FLAWED_ROBOTS}_flwb${ASSUMED_ACC[i]}_corb${TRUE_ACC[j]}.argos
 
@@ -217,35 +256,44 @@ sed -i "s/<entity.*/<entity quantity=\"${NUM_ROBOTS}\" max_trials=\"100\" base_n
                     # Modify variant type
                     sed -i -E "/<sensor_degradation_filter/,/<\/sensor_degradation_filter>/ s/(variant=\")[^\"]*/\1${VARIANTS[l]}/" ${ACTUAL_ARGOSFILE}
 
-                    echo -e "===== Experiment: ASSUMED_ACC=${ASSUMED_ACC[i]}_TRUE_ACC=${TRUE_ACC[j]}_TFR=${TFR[k]}_VARIANT=${VARIANTS[l]} ====="
-
                     # Iterate over different seeds (each seed is for one trial)
                     for ((m = ${#SEEDS[@]} - 1; m >= 0; m--)); do
+                        # Create folder for each seed (even though only one data file generated, as multi-threaded run would overwrite the data before we can change its filename)
+                        mkdir -p data/${JSON_FOLDER}/${VARIANTS[l]}_variant/${m}
+
                         # Configure experiment length and seed
                         sed -i "s/<experiment.*/<experiment length=\"$((${NUM_TICKS} / ${TICKS_PER_SECOND}))\" ticks_per_second=\"${TICKS_PER_SECOND}\" random_seed=\"${SEEDS[m]}\" \/>/" ${ACTUAL_ARGOSFILE}
 
-                        # Run the experiment
-                        echo -n "Running trial index=${m} ($((${#SEEDS[@]} - ${m}))/${#SEEDS[@]})... "
-                        run_dynamic_topo_simulations -l /dev/null -c ${ACTUAL_ARGOSFILE}
-                        echo "Done!"
+                        # Configure output path
+                        sed -i -E "/<loop_functions/,/<\/loop_functions>/ s/(path folder=\")[^\"]*/\1data\/${JSON_FOLDER}\/${VARIANTS[l]}_variant\/${m}/" ${ACTUAL_ARGOSFILE}
 
-                        # Modify the JSON data file so that `trial_ind` value reflects the correct trial index
-                        sed -i -E "s/([[:space:]]*\"num_trials\"[[:space:]]*:[[:space:]]*)[0-9]+/\1${#SEEDS[@]}/" data/${JSON_FOLDER}/${UNPROCESSED_DATA_FILE}
-                        sed -i -E "s/([[:space:]]*\"trial_ind\"[[:space:]]*:[[:space:]]*)0/\1${m}/" data/${JSON_FOLDER}/${UNPROCESSED_DATA_FILE}
+                        sleep 1.0
 
-                        # Rename and move the file
-                        mv data/${JSON_FOLDER}/${UNPROCESSED_DATA_FILE} data/${JSON_FOLDER}/${VARIANTS[l]}_variant/flw${NUM_FLAWED_ROBOTS}_t${m}.json
+                        # Run the following in a subshell in multi-threaded mode
+                        (
+                            cp ${ACTUAL_ARGOSFILE} data/${JSON_FOLDER}/${VARIANTS[l]}_variant/${m}/exp.argos
+
+                            # Run the experiment
+                            srun --exclusive --ntasks=1 --mem-per-cpu=500M run_dynamic_topo_simulations -l /dev/null -c data/${JSON_FOLDER}/${VARIANTS[l]}_variant/${m}/exp.argos
+
+                            # Modify the JSON data file so that `trial_ind` value reflects the correct trial index
+                            sed -i -E "s/([[:space:]]*\"num_trials\"[[:space:]]*:[[:space:]]*)[0-9]+/\1${#SEEDS[@]}/" data/${JSON_FOLDER}/${VARIANTS[l]}_variant/${m}/${UNPROCESSED_DATA_FILE}
+                            sed -i -E "s/([[:space:]]*\"trial_ind\"[[:space:]]*:[[:space:]]*)0/\1${m}/" data/${JSON_FOLDER}/${VARIANTS[l]}_variant/${m}/${UNPROCESSED_DATA_FILE}
+
+                            # Rename and move the file
+                            mv data/${JSON_FOLDER}/${VARIANTS[l]}_variant/${m}/${UNPROCESSED_DATA_FILE} data/${JSON_FOLDER}/${VARIANTS[l]}_variant/flw${NUM_FLAWED_ROBOTS}_t${m}.json
+                        ) &
                     done
 
-                    echo -e "\n" # separate the stdout statements
+                    # Let all the background processes complete
+                    wait
                 done
 
-                # Create a copy of the modifed configuration file in the current folder
-                cp ${ACTUAL_ARGOSFILE} data/${PARAM_FILE}
+                # Transfer data into target data directory (including parameter files)
+                # (this is to prevent overflowing the /local disk space)
+                mv data/${JSON_FOLDER} ${DATADIR}/data
             done
-
         done
-
     done
 
     END_TIME=$(date +%m/%d/%Y-%H:%M:%S)

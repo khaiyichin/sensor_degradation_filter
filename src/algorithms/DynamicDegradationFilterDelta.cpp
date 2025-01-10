@@ -270,7 +270,7 @@ void DynamicDegradationFilterDelta::Estimate()
 
     if (std::isnan(prediction_.first) || std::isnan(prediction_.second))
     {
-        throw std::runtime_error("NaN values encountered in the predicted values.");
+        throw std::runtime_error("(Variant = " + std::to_string(static_cast<int>(variant_)) + ") NaN values encountered in the predicted values.");
     }
 
     // Execute update step
@@ -278,7 +278,7 @@ void DynamicDegradationFilterDelta::Estimate()
 
     if (std::isnan(update_.first) || std::isnan(update_.second))
     {
-        throw std::runtime_error("NaN values encountered in the updated values.");
+        throw std::runtime_error("(Variant = " + std::to_string(static_cast<int>(variant_)) + ") NaN values encountered in the updated values.");
     }
 
     // Find the constrained version of the sensor accuracy; the constrained values are not fed back into the filter
