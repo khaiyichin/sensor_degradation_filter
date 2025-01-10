@@ -101,27 +101,36 @@ DynamicDegradationJsonDataSpecific = sdvm.StaticDegradationJsonDataSpecific
 ################################################################################
 
 
-# Extract the dynamic degradation data into Pandas DataFrames
-def extract_to_df(
-    json_data_obj: DynamicDegradationJsonData,
-    df: pd.DataFrame = pd.DataFrame(),
-):
-    """
 
-    Depending on the data type requested, this will output a DataFrame with `num_robots` columns of requested data appended.
-    The DataFrame should have `num_steps` * `num_trials` rows.
+################################################################################
+# Alias for the StaticDegradationJsonDataSpecific
+################################################################################
+
+# Extract the dynamic degradation data into Pandas DataFrames
+def extract_dynamic_degradation_data_to_dfs(
+    json_data_obj: DynamicDegradationJsonData,
+    inf_est_df: pd.DataFrame = pd.DataFrame(),
+    sensor_acc_df: pd.DataFrame = pd.DataFrame()
+):
+    """Extract the dynamic degradation experiment data into two Pandas DataFrame. 
+    
+    The first DataFrame contains (besides common values) the following columns for each robot:
+        - informed estimate (x_*), and
+        - weighted informed estimate (x_prime_*).
+
+    The second DataFrame contains (besides common values) the following columns for each robot:
+        - assumed_acc (b_hat_*), and
+        - true_acc (b_*).
+    
+    The * is a placeholder for the robot index. The returned DataFrame has `num_steps * num_trials` rows appended to whatever input DataFrame provided.
 
     Args:
         json_data_obj: DynamicDegradationJsonData that contains all the data intended for processing.
-        index_to_extract: 
-            0 = informed estimate;
-            1 = assumed accuracy;
-            2 = true accuracy;
-            3 = weighted informed estimate.
-        df: pd.DataFrame to concatenate the processed data to.
+        inf_est_df: pd.DataFrame containing the informed estimates and the weighted informed estimates to concatenate to.
+        sensor_acc_df: pd.DataFrame containing the assumed and true sensor accuracies to concatenate to.
 
     Returns:
-        A pandas.DataFrame with the following columns:
+        Two pandas.DataFrames, each with the following columns:
             "trial_ind",
             "step_ind",
             "sim_type",
@@ -148,23 +157,15 @@ def extract_to_df(
             "density",
             "filter_specific_params",
             "num_flawed_robots",
-            "x_0",
-            "x_1",
+            "DATA_A_0",
+            "DATA_A_1",
             ...,
-            "x_{num_robots-1}",
-            "b_0",
-            "b_1",
+            "DATA_A_{num_robots-1}",
+            "DATA_B_0",
+            "DATA_B_1",
             ...,
-            "b_{num_robots-1}",
-            "b_hat_0",
-            "b_hat_1",
-            ...,
-            "b_hat_{num_robots-1}",
-            "x_prime_0",
-            "x_prime_1",
-            ...,
-            "x_prime_{num_robots-1}"
-            ""
+            "DATA_B_{num_robots-1}",
+        where `DATA_A` is `x_*` (inf_est_df) / `b_hat_*` (sensor_acc_df) and `DATA_B` is `x_prime_*` (inf_est_df) / `b_*` (sensor_acc_df).
     """
     # json_data_obj.data is a dict with key=num_flawed_robots and value=np.ndarray with dim = (num_trials, num_robots, num_steps+1, 4)
 
@@ -175,76 +176,96 @@ def extract_to_df(
 
         # Fill up common data
         common_data = {
-            "sim_type": np.repeat(json_data_obj.sim_type, (json_data_obj.num_trials*json_data_obj.num_steps+1)),
-            "method": np.repeat(json_data_obj.method, (json_data_obj.num_trials*json_data_obj.num_steps+1)),
-            "num_trials": np.repeat(json_data_obj.num_trials, (json_data_obj.num_trials*json_data_obj.num_steps+1)),
-            "num_robots": np.repeat(json_data_obj.num_robots, (json_data_obj.num_trials*json_data_obj.num_steps+1)),
-            "num_steps": np.repeat(json_data_obj.num_steps, (json_data_obj.num_trials*json_data_obj.num_steps+1)),
-            "sensor_filter_period": np.repeat(json_data_obj.sensor_filter_period, (json_data_obj.num_trials*json_data_obj.num_steps+1)),
-            "comms_period": np.repeat(json_data_obj.comms_period, (json_data_obj.num_trials*json_data_obj.num_steps+1)),
-            "tfr": np.repeat(json_data_obj.tfr, (json_data_obj.num_trials*json_data_obj.num_steps+1)),
-            "flawed_sensor_acc_b": np.repeat(json_data_obj.flawed_sensor_acc_b, (json_data_obj.num_trials*json_data_obj.num_steps+1)),
-            "flawed_sensor_acc_w": np.repeat(json_data_obj.flawed_sensor_acc_w, (json_data_obj.num_trials*json_data_obj.num_steps+1)),
-            "correct_sensor_acc_b": np.repeat(json_data_obj.correct_sensor_acc_b, (json_data_obj.num_trials*json_data_obj.num_steps+1)),
-            "correct_sensor_acc_w": np.repeat(json_data_obj.correct_sensor_acc_w, (json_data_obj.num_trials*json_data_obj.num_steps+1)),
-            "dynamic_degradation": np.repeat(json_data_obj.dynamic_degradation, (json_data_obj.num_trials*json_data_obj.num_steps+1)),
-            "true_drift_coeff": np.repeat(json_data_obj.true_drift_coeff, (json_data_obj.num_trials*json_data_obj.num_steps+1)),
-            "true_diffusion_coeff": np.repeat(json_data_obj.true_diffusion_coeff, (json_data_obj.num_trials*json_data_obj.num_steps+1)),
-            "lowest_degraded_acc_lvl": np.repeat(json_data_obj.lowest_degraded_acc_lvl, (json_data_obj.num_trials*json_data_obj.num_steps+1)),
-            "obs_queue_size": np.repeat(json_data_obj.obs_queue_size, (json_data_obj.num_trials*json_data_obj.num_steps+1)),
-            "comms_range": np.repeat(json_data_obj.comms_range, (json_data_obj.num_trials*json_data_obj.num_steps+1)),
-            "meas_period": np.repeat(json_data_obj.meas_period, (json_data_obj.num_trials*json_data_obj.num_steps+1)),
-            "speed": np.repeat(json_data_obj.speed, (json_data_obj.num_trials*json_data_obj.num_steps+1)),
-            "density": np.repeat(json_data_obj.density, (json_data_obj.num_trials*json_data_obj.num_steps+1)),
-            "correct_robot_filter": np.repeat(json_data_obj.correct_robot_filter, (json_data_obj.num_trials*json_data_obj.num_steps+1)),
-            "filter_specific_params": np.repeat(json_data_obj.filter_specific_params, (json_data_obj.num_trials*json_data_obj.num_steps+1)),
-            "num_flawed_robots": np.repeat(n, (json_data_obj.num_trials*json_data_obj.num_steps+1)),
+            "sim_type": np.repeat(json_data_obj.sim_type, (json_data_obj.num_trials * (json_data_obj.num_steps+1))),
+            "method": np.repeat(json_data_obj.method, (json_data_obj.num_trials * (json_data_obj.num_steps+1))),
+            "num_trials": np.repeat(json_data_obj.num_trials, (json_data_obj.num_trials * (json_data_obj.num_steps+1))),
+            "num_robots": np.repeat(json_data_obj.num_robots, (json_data_obj.num_trials * (json_data_obj.num_steps+1))),
+            "num_steps": np.repeat(json_data_obj.num_steps, (json_data_obj.num_trials * (json_data_obj.num_steps+1))),
+            "sensor_filter_period": np.repeat(json_data_obj.sensor_filter_period, (json_data_obj.num_trials * (json_data_obj.num_steps+1))),
+            "comms_period": np.repeat(json_data_obj.comms_period, (json_data_obj.num_trials * (json_data_obj.num_steps+1))),
+            "tfr": np.repeat(json_data_obj.tfr, (json_data_obj.num_trials * (json_data_obj.num_steps+1))),
+            "flawed_sensor_acc_b": np.repeat(json_data_obj.flawed_sensor_acc_b, (json_data_obj.num_trials * (json_data_obj.num_steps+1))),
+            "flawed_sensor_acc_w": np.repeat(json_data_obj.flawed_sensor_acc_w, (json_data_obj.num_trials * (json_data_obj.num_steps+1))),
+            "correct_sensor_acc_b": np.repeat(json_data_obj.correct_sensor_acc_b, (json_data_obj.num_trials * (json_data_obj.num_steps+1))),
+            "correct_sensor_acc_w": np.repeat(json_data_obj.correct_sensor_acc_w, (json_data_obj.num_trials * (json_data_obj.num_steps+1))),
+            "dynamic_degradation": np.repeat(json_data_obj.dynamic_degradation, (json_data_obj.num_trials * (json_data_obj.num_steps+1))),
+            "true_drift_coeff": np.repeat(json_data_obj.true_drift_coeff, (json_data_obj.num_trials * (json_data_obj.num_steps+1))),
+            "true_diffusion_coeff": np.repeat(json_data_obj.true_diffusion_coeff, (json_data_obj.num_trials * (json_data_obj.num_steps+1))),
+            "lowest_degraded_acc_lvl": np.repeat(json_data_obj.lowest_degraded_acc_lvl, (json_data_obj.num_trials * (json_data_obj.num_steps+1))),
+            "obs_queue_size": np.repeat(json_data_obj.obs_queue_size, (json_data_obj.num_trials * (json_data_obj.num_steps+1))),
+            "comms_range": np.repeat(json_data_obj.comms_range, (json_data_obj.num_trials * (json_data_obj.num_steps+1))),
+            "meas_period": np.repeat(json_data_obj.meas_period, (json_data_obj.num_trials * (json_data_obj.num_steps+1))),
+            "speed": np.repeat(json_data_obj.speed, (json_data_obj.num_trials * (json_data_obj.num_steps+1))),
+            "density": np.repeat(json_data_obj.density, (json_data_obj.num_trials * (json_data_obj.num_steps+1))),
+            "correct_robot_filter": np.repeat(json_data_obj.correct_robot_filter, (json_data_obj.num_trials * (json_data_obj.num_steps+1))),
+            "filter_specific_params": np.repeat(json_data_obj.filter_specific_params, (json_data_obj.num_trials * (json_data_obj.num_steps+1))),
+            "num_flawed_robots": np.repeat(n, (json_data_obj.num_trials * (json_data_obj.num_steps+1))),
         }
 
         # Extract the data into numpy array
-        inf_est_curves_ndarr = data_ndarr_per_num_flawed_robot[..., 0]
+        reg_inf_est_curves_ndarr = data_ndarr_per_num_flawed_robot[..., 0]
         assumed_acc_curves_ndarr = data_ndarr_per_num_flawed_robot[..., 1]
         true_acc_curves_ndarr = data_ndarr_per_num_flawed_robot[..., 2]
         weighted_avg_inf_est_curves_ndarr = data_ndarr_per_num_flawed_robot[..., 3]
 
         # Reshape the data: first flatten along trials and steps, keeping agents as columns
-        inf_est_reshaped = reshape_ndarr(inf_est_curves_ndarr)
+        inf_est_reshaped = reshape_ndarr(reg_inf_est_curves_ndarr)
         assumed_acc_reshaped = reshape_ndarr(assumed_acc_curves_ndarr)
         true_acc_reshaped = reshape_ndarr(true_acc_curves_ndarr)
         weighted_avg_inf_est_reshaped = reshape_ndarr(weighted_avg_inf_est_curves_ndarr)
 
         # Create temporary dataframes
-        temp_inf_est_df = pd.DataFrame(inf_est_reshaped, columns=["x_{i}".format(i) for i in range(json_data_obj.num_robots)])
-        temp_assumed_acc_df = pd.DataFrame(assumed_acc_reshaped, columns=["b_{i}".format(i) for i in range(json_data_obj.num_robots)])
-        temp_true_acc_df = pd.DataFrame(true_acc_reshaped, columns=["b_hat_{i}".format(i) for i in range(json_data_obj.num_robots)])
-        temp_weighted_avg_inf_est_df = pd.DataFrame(weighted_avg_inf_est_reshaped, columns=["x_prime_{i}".format(i) for i in range(json_data_obj.num_robots)])
+        temp_reg_inf_est_df = pd.DataFrame(inf_est_reshaped, columns=["x_{0}".format(i) for i in range(json_data_obj.num_robots)])
+        temp_assumed_acc_df = pd.DataFrame(assumed_acc_reshaped, columns=["b_hat_{0}".format(i) for i in range(json_data_obj.num_robots)])
+        temp_true_acc_df = pd.DataFrame(true_acc_reshaped, columns=["b_{0}".format(i) for i in range(json_data_obj.num_robots)])
+        temp_weighted_avg_inf_est_df = pd.DataFrame(weighted_avg_inf_est_reshaped, columns=["x_prime_{0}".format(i) for i in range(json_data_obj.num_robots)])
 
-        temp_df = pd.concat([
+        temp_inf_est_df = pd.concat([
             pd.DataFrame(common_data),
-            temp_inf_est_df,
+            temp_reg_inf_est_df,
+            temp_weighted_avg_inf_est_df
+        ], axis=1)
+
+        temp_sensor_acc_df = pd.concat([
+            pd.DataFrame(common_data),
             temp_assumed_acc_df,
             temp_true_acc_df,
-            temp_weighted_avg_inf_est_df
-        ], axis=1, ignore_index=True)
+        ], axis=1)
 
         # Generate trial and step indices
         trial_indices = np.repeat(np.arange(json_data_obj.num_trials), json_data_obj.num_steps + 1)
         step_indices = np.tile(np.arange(json_data_obj.num_steps + 1), json_data_obj.num_trials)
 
         # Add the trial and step indices
-        temp_df["trial_ind"] = trial_indices
-        temp_df["step_ind"] = step_indices
-        temp_df = temp_df[["trial_ind", "step_ind"] + [col for col in temp_df.columns if col not in ['trial_ind', 'step_ind']]]
+        temp_inf_est_df["trial_ind"] = trial_indices
+        temp_inf_est_df["step_ind"] = step_indices
+        temp_inf_est_df = temp_inf_est_df[["trial_ind", "step_ind"] + [col for col in temp_inf_est_df.columns if col not in ['trial_ind', 'step_ind']]]
 
-        df = pd.concat([df, temp_df], axis=0, ignore_index=True).copy(deep=True)
+        temp_sensor_acc_df["trial_ind"] = trial_indices
+        temp_sensor_acc_df["step_ind"] = step_indices
+        temp_sensor_acc_df = temp_sensor_acc_df[["trial_ind", "step_ind"] + [col for col in temp_sensor_acc_df.columns if col not in ['trial_ind', 'step_ind']]]
 
-    return df
+        inf_est_df = pd.concat([inf_est_df, temp_inf_est_df], axis=0, ignore_index=True).copy(deep=True)
+        sensor_acc_df = pd.concat([sensor_acc_df, temp_sensor_acc_df], axis=0, ignore_index=True).copy(deep=True)
+
+    return (inf_est_df, sensor_acc_df)
+
+################################################################################
+################################################################################
+
+
 
 # Compute RMSD for each trial (root mean squared over all the robots per trial)
-def rmsd(arr_actual: np.array, arr_target: np.array):
+def rmsd(arr_base, arr_target):
+    """Compute the root mean squared deviation from a given target.
+
+    Args:
+        arr_base: array of base values
+        arr_target: array of target values.
+    """
     return np.sqrt(
         np.mean(
-            np.square(arr_actual - arr_target)
+            np.square(arr_base - arr_target)
         )
     )
 

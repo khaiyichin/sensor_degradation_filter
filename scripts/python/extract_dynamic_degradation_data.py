@@ -42,7 +42,8 @@ def load_data(args):
     return [obj for obj in json_data_lst if obj is not None]
 
 def save_to_h5(json_data_lst, args):
-    df = pd.DataFrame()
+    inf_est_df = pd.DataFrame()
+    sensor_acc_df = pd.DataFrame()
 
     start = None
 
@@ -52,14 +53,15 @@ def save_to_h5(json_data_lst, args):
             print("Extracting data {0}/{1}...".format(i+1, len(json_data_lst)), end=" ")
             sys.stdout.flush()
 
-        df = ddvm.extract_to_df(d, df)
+        inf_est_df, sensor_acc_df = ddvm.extract_dynamic_degradation_data_to_dfs(d, inf_est_df, sensor_acc_df)
 
         if args.verbose:
             print("Done!")
             end = timeit.default_timer()
             print("\t-- Elapsed time:", end-start, "s --\n")
 
-    df.to_hdf(args.output, key="df" if not args.key else args.key)
+    inf_est_df.to_hdf("inf_est_" + args.output, key="df" if not args.key else args.key)
+    sensor_acc_df.to_hdf("sensor_acc_" + args.output, key="df" if not args.key else args.key)
 
     print("Stored data as {0} with key \"{1}\"".format(os.path.join(os.getcwd(), args.output), "df" if not args.key else args.key))
 
@@ -71,9 +73,10 @@ def main(args):
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(description="Extract time series data from simulated DYNAMIC DEGRADATION experiments to save into HDF file. The stored data is a Pandas DataFrame.")
+    parser = argparse.ArgumentParser(description="Extract time series data from simulated DYNAMIC DEGRADATION experiments to save into HDF files. The data is stored into two Pandas DataFrame.")
     parser.add_argument("FOLDER", type=str, help="path to the folder containing all the JSON data files; the files can be several levels deep")
-    parser.add_argument("--output", default="dynamic_degradation_data.h5", type=str, help="output filename (default: dynamic_degradation_data.h5)")
+    parser.add_argument("--output", default="dynamic_degradation_data.h5", type=str, help="output filename suffix (default: dynamic_degradation_data.h5)")
+    parser.add_argument("--key", default="df", help="dictionary key when storing the Pandas DataFrame (default: \"df\")")
     parser.add_argument("--verbose", action="store_true", help="flag to run with verbose output")
     
     args = parser.parse_args()

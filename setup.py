@@ -11,6 +11,7 @@ setuptools.setup(
     scripts=[
         "scripts/python/run_static_degradation_experiment.py",
         "scripts/python/extract_convergence_accuracy_data.py",
+        "scripts/python/extract_dynamic_degradation_data.py",
         "scripts/python/extract_decision_data.py"
     ]
 )
