@@ -199,8 +199,9 @@ class StaticDegradationJsonDataSpecific(StaticDegradationJsonData):
         "informed_estimate",
         "assumed_accuracy_b",
         "assumed_accuracy_w",
-        "true_accuracy_b", and
-        "true_accuracy_w".
+        "true_accuracy_b",
+        "true_accuracy_w", and
+        "weighted_avg_informed_estimate".
     """
 
     def __init__(self, data_folder: str, data_keyword: str, silent=True):
@@ -376,7 +377,7 @@ def process_convergence_accuracy(
             "accuracies"
     """
 
-    # json_data_obj.data is a dict with key=num_flawed_robots and value=np.ndarray with dim = (num_flawed_robots, num_trials, num_robots, num_steps+1, 2)
+    # json_data_obj.data is a dict with key=num_flawed_robots and value=np.ndarray with dim = (num_trials, num_robots, num_steps+1, 2)
 
     # Iterate through each case of # of flawed robots
     for n, data_ndarr_per_num_flawed_robot in json_data_obj.data.items():

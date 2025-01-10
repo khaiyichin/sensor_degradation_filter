@@ -4,7 +4,7 @@
 trap 'echo "${LINENO}: ${BASH_COMMAND}"; exit 1' ERR
 
 CURR_WORKING_DIR=$(pwd)
-SBATCH_SCRIPT_TEMPLATE=sbatch_dynamic_topo_dynamic_deg_run_DELTA.sh
+SBATCH_SCRIPT_TEMPLATE=sbatch_dynamic_topo_dynamic_deg_run.sh
 ARGOSFILE=param_multi_robot_sim_1d_dynamic_degradation_DELTA.argos
 
 # Parameters to test
@@ -21,7 +21,7 @@ OBS_QUEUE_SIZE=1000
 DYNAMIC_QUEUE=true
 WEIGHTED_AVG_INFORMED_EST=true
 PRED_DEG_VAR_R=1e-8
-INIT_VAR=1e-2
+INIT_VAR=1e-4
 LOWEST_ASSUMED_ACC_LVL=500
 LAAL_DEC=0.5
 CORRECT_FILTER=false
@@ -77,7 +77,7 @@ for ((i = 0; i < ${#DENSITY}; i++)); do
 
             # Run the job
             # With each core running 1 trial, we should only need about 500M each per core, leaving about 1G left for the waiting core
-            sbatch -N 1 -n 30 --mem=16G -p short -o "log_%x_%j.out" -e "log_%x_%j.err" -J ${JOB_NAME} -t 04:00:00 --mail-user=kchin@wpi.edu --mail-type=fail,end ${SBATCH_SCRIPT_TEMPLATE}
+            sbatch -N 1 -n 32 --mem=16G -p short -o "log_%x_%j.out" -e "log_%x_%j.err" -J ${JOB_NAME} -t 02:00:00 --mail-user=kchin@wpi.edu --mail-type=fail,end ${SBATCH_SCRIPT_TEMPLATE}
         done
     done
 done

@@ -25,3 +25,8 @@
 
 - The `DynamicDegradationDelta` class is a method that uses the ExtendedKalmanFilter to estimate the sensor accuracy and then apply the truncation based on the linear inequality constraints _only_ if the estimates violate the constraints. This highlights the main distinction from Charlie: the estimates are not modified within the EKF but after estimates are done. The modified estimates are also _not_ fed back into the filter here.
     - The terms "window size" and "queue size" _do not_ mean the same thing. The window size is used to find the moving average value of the degradation rate (so that we get dynamic observation queue sizes; this applies to the Charlie filter as well). The queue size strictly applies to the storage of observations (and past informed estimates, if requested).
+
+
+
+
+- Each `*DegradationJsonData` object contains data from multiple `num_flawed_robots` experiments (all trials of that experiment is included). The top-level key is `num_flawed_robots`. _E.g.,_ if there are two cases of `num_flawed_robots` within the same directory of JSON files, then all those files will be stored into one `*DegradationJsonData` object.
