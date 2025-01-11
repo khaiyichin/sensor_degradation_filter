@@ -4,6 +4,9 @@ import os
 import pandas as pd
 import scripts.python.static_degradation_viz_module as sdvm
 
+INF_EST_DF_PREFIX = "inf_est_"
+SENSOR_ACC_DF_PREFIX = "sensor_acc_"
+
 class DynamicDegradationJsonData(sdvm.StaticDegradationJsonData):
     def populate_common_data(self, json_dict):
         super().populate_common_data(json_dict)
@@ -103,7 +106,7 @@ DynamicDegradationJsonDataSpecific = sdvm.StaticDegradationJsonDataSpecific
 
 
 ################################################################################
-# Alias for the StaticDegradationJsonDataSpecific
+# Extract dynamic degradation data into DataFrames
 ################################################################################
 
 # Extract the dynamic degradation data into Pandas DataFrames
@@ -112,8 +115,8 @@ def extract_dynamic_degradation_data_to_dfs(
     inf_est_df: pd.DataFrame = pd.DataFrame(),
     sensor_acc_df: pd.DataFrame = pd.DataFrame()
 ):
-    """Extract the dynamic degradation experiment data into two Pandas DataFrame. 
-    
+    """Extract the dynamic degradation experiment data into two Pandas DataFrame.
+
     The first DataFrame contains (besides common values) the following columns for each robot:
         - informed estimate (x_*), and
         - weighted informed estimate (x_prime_*).
@@ -121,7 +124,7 @@ def extract_dynamic_degradation_data_to_dfs(
     The second DataFrame contains (besides common values) the following columns for each robot:
         - assumed_acc (b_hat_*), and
         - true_acc (b_*).
-    
+
     The * is a placeholder for the robot index. The returned DataFrame has `num_steps * num_trials` rows appended to whatever input DataFrame provided.
 
     Args:
@@ -255,18 +258,75 @@ def extract_dynamic_degradation_data_to_dfs(
 
 
 
-# Compute RMSD for each trial (root mean squared over all the robots per trial)
+################################################################################
+# (Low-level) RMSD function given two arrays
+################################################################################
+
 def rmsd(arr_base, arr_target):
     """Compute the root mean squared deviation from a given target.
 
     Args:
         arr_base: array of base values
         arr_target: array of target values.
+
+    Returns:
+        An array of RMSD of the same size as the inputs
     """
+    if (type(arr_target) != float and len(arr_base) != len(arr_target)):
+        print("len(arr_base)={0}, len(arr_target)={1}".format(len(arr_base), len(arr_target)))
+        raise RuntimeError("The two input arrays must be the same size or the target array should just be a floating point value.")
+
     return np.sqrt(
         np.mean(
             np.square(arr_base - arr_target)
         )
     )
 
-# Compute 
+################################################################################
+################################################################################
+
+
+
+################################################################################
+# Compute the RMSD and store into a DataFrame
+################################################################################
+
+def compute_raw_rmsd(inf_est_df: pd.DataFrame, sensor_acc_df: pd.DataFrame):
+    """Compute the RMSD for each time step.
+
+    A single RMSD value is computed from all the robots' values at a particular time step.
+
+    Args:
+        inf_est_df: DataFrame containing the regular and weighted average informed estimates.
+        sensor_acc_df: DataFrame containing the assumed and true sensor accuracies.
+
+    Returns:
+        A Pandas DataFrame containing only the common data and the 2 columns of RMSD values.
+    """
+
+    # Create a new DataFrame with the common values
+    df = inf_est_df.loc[:, ~inf_est_df.columns.str.startswith("x")].copy(deep=True)
+
+    # Get the columns desired
+    x_prime_columns = [col for col in inf_est_df.columns if col.startswith("x_prime_")]
+    b_hat_columns = [col for col in sensor_acc_df.columns if col.startswith("b_hat_")]
+    b_columns = [col for col in sensor_acc_df.columns if col.startswith("b_") and not col.startswith("b_hat_")]
+
+    # Compute the RMSD
+    df["inf_est_rmsd"] = inf_est_df.apply(
+        lambda row: rmsd(
+            row[x_prime_columns].values,
+            row["tfr"]
+        ),
+        axis=1
+    )
+
+    df["sensor_acc_rmsd"] = sensor_acc_df.apply(
+        lambda row: rmsd(
+            row[b_hat_columns].values,
+            row[b_columns].values
+        ),
+        axis=1
+    )
+
+    return df

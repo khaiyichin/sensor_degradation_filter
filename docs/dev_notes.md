@@ -30,3 +30,10 @@
 
 
 - Each `*DegradationJsonData` object contains data from multiple `num_flawed_robots` experiments (all trials of that experiment is included). The top-level key is `num_flawed_robots`. _E.g.,_ if there are two cases of `num_flawed_robots` within the same directory of JSON files, then all those files will be stored into one `*DegradationJsonData` object.
+
+### Analyzing dynamic degradation data
+- Procedure for analyzing the dynamic degradation data:
+    1. Extract using `extract_dynamic_degradation_data.py`. This will generate a bunch of HDF file pairs, one containing the informed estimate values, the other containing sensor accuracy values.
+    2. Compute the RMSD values using `compute_rmsd_df.py`. This will take the HDF files from the previous step to compute and concatenate into a single HDF file with the RMSD values.
+
+- This is done in two steps to compartmentalize the different parts of the data processing procedure, which should improve debugging (if things go wrong). It also provides a bit of flexibility in accessing data; the first step contains *all* the raw data that can be used differently downstream.

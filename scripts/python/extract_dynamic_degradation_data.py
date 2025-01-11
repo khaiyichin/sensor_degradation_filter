@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 
-import scripts.python.static_degradation_viz_module as sdvm
 import scripts.python.dynamic_degradation_viz_module as ddvm
 import pandas as pd
 import os
 import argparse
 import timeit
 import sys
+import warnings
 from joblib import Parallel, delayed
 
 """Saving numpy arrays in HDF files will give a performance warning, so ignoring it"""
-# warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
+warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 
 def load_data(args):
     """Load the JSON data from a given folder
@@ -60,8 +60,8 @@ def save_to_h5(json_data_lst, args):
             end = timeit.default_timer()
             print("\t-- Elapsed time:", end-start, "s --\n")
 
-    inf_est_df.to_hdf("inf_est_" + args.output, key="df" if not args.key else args.key)
-    sensor_acc_df.to_hdf("sensor_acc_" + args.output, key="df" if not args.key else args.key)
+    inf_est_df.to_hdf(ddvm.INF_EST_DF_PREFIX + args.output, key="df" if not args.key else args.key)
+    sensor_acc_df.to_hdf(ddvm.SENSOR_ACC_DF_PREFIX + args.output, key="df" if not args.key else args.key)
 
     print("Stored data as {0} with key \"{1}\"".format(os.path.join(os.getcwd(), args.output), "df" if not args.key else args.key))
 
