@@ -54,7 +54,7 @@ DATADIR=$(pwd)
 
 # Path to the LOCAL param_multi_robot_sim_1d_dynamic_degradation.argos (copied by the high-level script)
 # (Adapt this to your needs)
-TEMPLATE_ARGOSFILE=${DATADIR}/param_multi_robot_sim_1d_dynamic_degradation_DELTA.argos
+TEMPLATE_ARGOSFILE=${DATADIR}/param_multi_robot_sim_1d_dynamic_degradation_ORACLE.argos
 
 ########################################
 #
@@ -64,31 +64,31 @@ TEMPLATE_ARGOSFILE=${DATADIR}/param_multi_robot_sim_1d_dynamic_degradation_DELTA
 
 # Parameters related to this job
 # (To be changed by the high level script)
-DENSITY=1                      # desired swarm density
-WALL_POSITION=2.452639         # computed from desired density
-TRUE_DEG_DRIFT=-25e-6          # true sensor degradation drift coefficient (Wiener model)
-TRUE_DEG_DIFFUSION=1e-4        # true sensor degradation drift coefficient (Wiener model)
-LOWEST_DEGRADED_ACC_LVL=500    # lowest true accuracy value that the sensor will degrade to, in 1000s format
-LDAL_DEC=0.5                   # lowest true accuracy value in decimal format (bash doesn't support decimal math)
-OBS_QUEUE_SIZE=1000            # max observation queue size
-DYNAMIC_QUEUE=true             # whether to use dynamic-sized observation queues
-WEIGHTED_AVG_INFORMED_EST=true # whether to use the weighted informed estimates in the filter
-PRED_DEG_MODEL_B=-5e-5         # state prediction model B
-PRED_DEG_VAR_R=1e-8            # state prediction variance R
-INIT_VAR=1e-2                  # initial variance for the filter (the initial mean will be the initial assumed sensor accuracy)
-LOWEST_ASSUMED_ACC_LVL=500     # lowest assumed accuracy value that the filter will estimate, in 1000s format
-LAAL_DEC=0.5                   # lowest assumed accuracy value in decimal format (bash doesn't support decimal math)
+DENSITY=1
+WALL_POSITION=2.452639
+TRUE_DEG_DRIFT=-25e-6
+TRUE_DEG_DIFFUSION=1e-4
+LOWEST_DEGRADED_ACC_LVL=500
+LDAL_DEC=0.5
+OBS_QUEUE_SIZE=1000
+DYNAMIC_QUEUE=true
+WEIGHTED_AVG_INFORMED_EST=true
+PRED_DEG_MODEL_B=0
+PRED_DEG_VAR_R=1e-8
+INIT_VAR=1e-4
+LOWEST_ASSUMED_ACC_LVL=500
+LAAL_DEC=0.5
 
 # Parameters related to this job
 # (Fixed)
 NUM_ROBOTS=15
-NUM_FLAWED_ROBOTS=${NUM_ROBOTS} # set all robots to be flawed so that the filter will be run for all of them
-CORRECT_FILTER=false            # whether non-flawed robots should run the filter (this only applies for *non-flawed* robots)
+NUM_FLAWED_ROBOTS=15
+CORRECT_FILTER=false
 if [[ "${CORRECT_FILTER}" == "true" ]]; then CORFILT=1; else CORFILT=0; fi
 TRUE_ACC=(999 800)
 TRUE_ACC_DEC=(0.999 0.8)
-ASSUMED_ACC=(999 0.8) # when flawed robots num is set to 0 this isn't applied
-ASSUMED_ACC_DEC=(0.999 0.8)
+ASSUMED_ACC=(null) # when flawed robots num is set to 0 this isn't applied
+ASSUMED_ACC_DEC=(null)
 TFR=(550 750 950)
 TFR_DEC=(0.55 0.75 0.95)
 SEEDS=(
@@ -123,7 +123,7 @@ SEEDS=(
     345030
     452015
 )            # the randomly pre-generated list of seeds (so that all the experiments are the same across the two variants)
-METHOD=DELTA # filter type
+METHOD=ORACLE
 NUM_TICKS=30000
 SPEED=14.14
 COMMS_PERIOD=5
@@ -135,8 +135,8 @@ ARENA_LEN=5
 DYNAMIC_DEGRADATION=true # dynamic sensor degradation
 MEAS_PERIOD=5
 FILTER_PERIOD=5
-VARIANTS=("bin" "lap")
-NUM_TRIALS=1                                            # must be 1 because the we want each trial to use a particular seed
+VARIANTS=(oracle)
+NUM_TRIALS=1
 UNPROCESSED_DATA_FILE="flw${NUM_FLAWED_ROBOTS}_t0.json" # used to search the output data file
 
 ########################################
@@ -225,10 +225,10 @@ sed -i "s/<entity.*/<entity quantity=\"${NUM_ROBOTS}\" max_trials=\"100\" base_n
     echo -e "\n################################### EXECUTION BEGIN ###################################"
     echo -e "################################# ${START_TIME} #################################\n"
 
-    # Iterate over assumed sensor accuracies
+    # Iterate over assumed sensor accuracies (dummy values; uses true accuracy value)
     for ((i = 0; i < ${#ASSUMED_ACC[@]}; i++)); do
-        sed -i -E "/<loop_functions/,/<\/loop_functions>/ s/(flawed_robots[[:space:]]*num=\")[^\"]*(\"[[:space:]]*acc_b=\")[^\"]*(\"[[:space:]]*acc_w=\")[^\"]*(\"[[:space:]]*activate_filter_for_all=\")[^\"]*/\1${NUM_FLAWED_ROBOTS}\2${ASSUMED_ACC_DEC[i]}\3${ASSUMED_ACC_DEC[i]}\4${CORRECT_FILTER}/" ${ACTUAL_ARGOSFILE}
-        sed -i -E "/<sensor_degradation_filter/,/<\/sensor_degradation_filter>/ s/(init_mean=\")[^\"]*/\1${ASSUMED_ACC_DEC[i]}/" ${ACTUAL_ARGOSFILE}
+        sed -i -E "/<loop_functions/,/<\/loop_functions>/ s/(flawed_robots[[:space:]]*num=\")[^\"]*(\"[[:space:]]*acc_b=\")[^\"]*(\"[[:space:]]*acc_w=\")[^\"]*(\"[[:space:]]*activate_filter_for_all=\")[^\"]*/\1${NUM_FLAWED_ROBOTS}\2${TRUE_ACC_DEC[j]}\3${TRUE_ACC_DEC[j]}\4${CORRECT_FILTER}/" ${ACTUAL_ARGOSFILE}
+        sed -i -E "/<sensor_degradation_filter/,/<\/sensor_degradation_filter>/ s/(init_mean=\")[^\"]*/\1${TRUE_ACC_DEC[j]}/" ${ACTUAL_ARGOSFILE} # follows the true accuracy
 
         # Iterate over true sensor accuracies
         for ((j = 0; j < ${#TRUE_ACC[@]}; j++)); do
@@ -242,11 +242,11 @@ sed -i "s/<entity.*/<entity quantity=\"${NUM_ROBOTS}\" max_trials=\"100\" base_n
                 # Current date and time
                 CURR_DATETIME=$(date "+%m%d%y_%H%M%S")
 
-                JSON_FOLDER="${CURR_DATETIME}_t${#SEEDS[@]}_s${NUM_TICKS}_tfr${TFR[k]}_flw${NUM_FLAWED_ROBOTS}_flwb${ASSUMED_ACC[i]}_corb${TRUE_ACC[j]}_drift${TRUE_DEG_DRIFT}_diff${TRUE_DEG_DIFFUSION}_ldal${LOWEST_DEGRADED_ACC_LVL}_modelb${PRED_DEG_MODEL_B}_modelr${PRED_DEG_VAR_R}_laal${LOWEST_ASSUMED_ACC_LVL}_commsp${COMMSP}_filtp${FILTER_PERIOD}_corfilt${CORFILT}"
+                JSON_FOLDER="${CURR_DATETIME}_t${#SEEDS[@]}_s${NUM_TICKS}_tfr${TFR[k]}_flw${NUM_FLAWED_ROBOTS}_flwb${TRUE_ACC[j]}_corb${TRUE_ACC[j]}_drift${TRUE_DEG_DRIFT}_diff${TRUE_DEG_DIFFUSION}_ldal${LOWEST_DEGRADED_ACC_LVL}_modelb${PRED_DEG_MODEL_B}_modelr${PRED_DEG_VAR_R}_laal${LOWEST_ASSUMED_ACC_LVL}_commsp${COMMS_PERIOD}_filtp${FILTER_PERIOD}_corfilt${CORFILT}"
                 mkdir -p data/${JSON_FOLDER}
 
                 # Define configuration file name
-                PARAM_FILE=tfr${TFR[k]}_flw${NUM_FLAWED_ROBOTS}_flwb${ASSUMED_ACC[i]}_corb${TRUE_ACC[j]}.argos
+                PARAM_FILE=tfr${TFR[k]}_flw${NUM_FLAWED_ROBOTS}_flwb${TRUE_ACC[j]}_corb${TRUE_ACC[j]}.argos
 
                 # Iterate over variants
                 for ((l = 0; l < ${#VARIANTS[@]}; l++)); do

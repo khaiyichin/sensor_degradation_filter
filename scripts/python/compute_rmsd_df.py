@@ -69,18 +69,6 @@ def process_and_compute_rmsd(
         # Compute RMSD
         return ddvm.compute_raw_rmsd(inf_est_df, sensor_acc_df)
 
-    # df = pd.DataFrame()
-
-    # for inf_est_df_path, sensor_acc_df_path in zip(inf_est_df_filepaths, sensor_acc_df_filepaths):
-
-    #     # Load HDF files
-    #     inf_est_df = pd.read_hdf(inf_est_df_path)
-    #     sensor_acc_df = pd.read_hdf(sensor_acc_df_path)
-
-    #     # Compute and store RMSD
-    #     df = pd.concat([df, ddvm.compute_raw_rmsd(inf_est_df, sensor_acc_df)], ignore_index=True)
-
-
     dfs = Parallel(n_jobs=-1, verbose=0)(
         delayed(parallel_load_compute_rmsd)(inf_est_df, sensor_acc_df) for inf_est_df, sensor_acc_df in zip(inf_est_df_filepaths, sensor_acc_df_filepaths)
     )

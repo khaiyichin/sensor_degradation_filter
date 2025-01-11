@@ -4,13 +4,13 @@
 trap 'echo "${LINENO}: ${BASH_COMMAND}"; exit 1' ERR
 
 CURR_WORKING_DIR=$(pwd)
-SBATCH_SCRIPT_TEMPLATE=sbatch_dynamic_topo_dynamic_deg_run_DELTA.sh
-ARGOSFILE=param_multi_robot_sim_1d_dynamic_degradation_DELTA.argos
+SBATCH_SCRIPT_TEMPLATE=sbatch_dynamic_topo_dynamic_deg_run_ORACLE.sh
+ARGOSFILE=param_multi_robot_sim_1d_dynamic_degradation_ORACLE.argos
 
 # Parameters to test
 DENSITY=(1)
 WALL_POSITION=(2.452639)
-PRED_DEG_MODEL_B_RANGE=(-10e-6 -25e-6 -40e-6)
+PRED_DEG_MODEL_B_RANGE=(0)
 LDAL_RANGE=(500 700)
 LDAL_DEC_RANGE=(0.5 0.7)
 
@@ -31,7 +31,7 @@ NUM_TRIALS=1
 NUM_TICKS=30000
 FILTER_PERIOD=5
 METHOD=DELTA
-VARIANTS=("bin" "lap")
+VARIANTS=("oracle")
 
 module load slurm
 
