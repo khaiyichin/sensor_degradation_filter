@@ -1,11 +1,15 @@
 import numpy as np
 import json
 import os
+import re
 import pandas as pd
 import scripts.python.static_degradation_viz_module as sdvm
+import plotly.express as px
+import plotly.graph_objects as go
 
 INF_EST_DF_PREFIX = "inf_est_"
 SENSOR_ACC_DF_PREFIX = "sensor_acc_"
+RMSD_DF_PREFIX = "rmsd_"
 
 class DynamicDegradationJsonData(sdvm.StaticDegradationJsonData):
     def populate_common_data(self, json_dict):
@@ -330,3 +334,288 @@ def compute_raw_rmsd(inf_est_df: pd.DataFrame, sensor_acc_df: pd.DataFrame):
     )
 
     return df
+
+################################################################################
+################################################################################
+
+
+
+################################################################################
+# Reduce DataFrame based on some keyword and `step_ind``
+################################################################################
+
+def reduce_rmsd_df_by_keyword_and_step_ind(df: pd.DataFrame, keyword: str, keyword_is_filter_specific: bool = False):
+    """Reduce the size of the DataFrame by computing descriptive statistics for each unique `step_ind` and `keyword`.
+
+    Args:
+        df: The DataFrame with columns `inf_est_rmsd` and `sensor_acc_rmsd`.
+        keyword: The parameter to group by (besides `step_ind`) to compute stats from.
+
+    Return:
+        A reduced DataFrame containing the mean and variance of the RMSD data.
+    """
+    actual_keyword = ""
+
+    if keyword_is_filter_specific:
+        actual_keyword = "fsp_" + keyword
+        df[actual_keyword] = df["filter_specific_params"].apply(lambda x: x.get(keyword, None))
+    else:
+        actual_keyword = keyword
+
+    return df.groupby([actual_keyword, "step_ind"]).agg(
+        inf_est_rmsd_mean=("inf_est_rmsd", "mean"),
+        inf_est_rmsd_var=("inf_est_rmsd", lambda x: x.var(ddof=1)),
+        sensor_acc_rmsd_mean=("sensor_acc_rmsd", "mean"),
+        sensor_acc_rmsd_var=("sensor_acc_rmsd", lambda x: x.var(ddof=1)),
+        count=("inf_est_rmsd", "count") # the count of inf_est_rmsd is the same as sensor_acc_rmsd
+    ).reset_index()
+
+
+################################################################################
+################################################################################
+
+
+
+################################################################################
+# Combine reduced DataFrames by recomputing the mean and standard deviations
+################################################################################
+
+def combine_reduced_rmsd_df(dfs: list, col_keyword: str):
+    """Combine multiple reduced RMSD DataFrames.
+
+    Formula of combined variance is obtained from: https://math.stackexchange.com/a/2971563 (verified by hand)
+
+    Args:
+        dfs: List of reduced DataFrames.
+        col_keyword: The column name to identify columns to merge on (besides `step_ind`).
+
+    Returns:
+        The combined reduced DataFrame.
+    """
+
+    # Combine the target DataFrame into the base DataFrame
+    def combine_means_variances(df_base: pd.DataFrame, df_target: pd.DataFrame):
+        # Merge by col_keyword and `step_ind`, keeping all rows from both DataFrames (outer join)
+        combined = pd.merge(df_base, df_target, on=[col_keyword, "step_ind"], how="outer", suffixes=('_df_base', '_df_target'))
+
+        combine_mean = lambda m_b, m_t, c_b, c_t: ((m_b * c_b) + (m_t * c_t)) / (c_b + c_t)
+        combine_variance = lambda m_b, m_t, m_bt, v_b, v_t, c_b, c_t: (
+            (c_b - 1) * v_b + c_b * np.square(m_b - m_bt) +
+            (c_t - 1) * v_t + c_t * np.square(m_t - m_bt)
+        ) / (c_b + c_t - 1)
+
+        # Compute the combined mean
+        combined["inf_est_rmsd_mean"] = combine_mean(
+            combined["inf_est_rmsd_mean_df_base"].fillna(0),
+            combined["inf_est_rmsd_mean_df_target"].fillna(0),
+            combined["count_df_base"].fillna(0),
+            combined["count_df_target"].fillna(0)
+        )
+
+        combined["sensor_acc_rmsd_mean"] = combine_mean(
+            combined["sensor_acc_rmsd_mean_df_base"].fillna(0),
+            combined["sensor_acc_rmsd_mean_df_target"].fillna(0),
+            combined["count_df_base"].fillna(0),
+            combined["count_df_target"].fillna(0)
+        )
+
+        # Compute the combined variance
+        combined["inf_est_rmsd_var"] = combine_variance(
+            combined["inf_est_rmsd_mean_df_base"].fillna(0),
+            combined["inf_est_rmsd_mean_df_target"].fillna(0),
+            combined["inf_est_rmsd_mean"].fillna(0),
+            combined["inf_est_rmsd_var_df_base"].fillna(0),
+            combined["inf_est_rmsd_var_df_target"].fillna(0),
+            combined["count_df_base"].fillna(0),
+            combined["count_df_target"].fillna(0)
+        )
+
+        combined["sensor_acc_rmsd_var"] = combine_variance(
+            combined["sensor_acc_rmsd_mean_df_base"].fillna(0),
+            combined["sensor_acc_rmsd_mean_df_target"].fillna(0),
+            combined["sensor_acc_rmsd_mean"].fillna(0),
+            combined["sensor_acc_rmsd_var_df_base"].fillna(0),
+            combined["sensor_acc_rmsd_var_df_target"].fillna(0),
+            combined["count_df_base"].fillna(0),
+            combined["count_df_target"].fillna(0)
+        )
+
+        # Combine the counts
+        combined["count"] = combined["count_df_base"].fillna(0) + combined["count_df_target"].fillna(0)
+
+        # Drop the temporary columns used for merging
+        combined.drop(
+            columns=[
+                "inf_est_rmsd_mean_df_base", "inf_est_rmsd_var_df_base",
+                "sensor_acc_rmsd_mean_df_base", "sensor_acc_rmsd_var_df_base",
+                "count_df_base",
+                "inf_est_rmsd_mean_df_target", "inf_est_rmsd_var_df_target",
+                "sensor_acc_rmsd_mean_df_target", "sensor_acc_rmsd_var_df_target",
+                "count_df_target"
+            ], inplace=True
+        )
+
+        return combined
+
+    combined_result = dfs[0]
+
+    for df in dfs[1:]:
+        combined_result = combine_means_variances(combined_result, df)
+
+    return combined_result
+
+################################################################################
+################################################################################
+
+
+
+################################################################################
+# Create a line plot
+################################################################################
+
+def plot_line_plotly(
+    target_df,
+    y_key: str,
+    x_key: str,
+    color_key: str,
+    **kwargs
+):
+    """
+
+    Args:
+        target_df: Pandas DataFrame containing the data to plot.
+        y_key: Key to the `df` column that represents the y-axis.
+        x_key: Key to the `df` column that represents the x-axis.
+        color_key: Key to the `df` column for the colors
+        kwargs: Specific keyword arguments
+
+    Returns:
+        Handle to the created scatter plot figure.
+    """
+
+    # Create copy of data
+    df = pd.DataFrame(target_df, copy=True)
+
+    # Initialize an empty figure
+    fig = go.Figure()
+
+    # Plot one line group at a time (distinguished by `color_key`)
+    for ind, (group_name, group_df) in enumerate(df.groupby(color_key)):
+
+        # Set current fill color
+        fc = list(sdvm.COLOR_BLIND_FRIENDLY_COLORS_DICT_RGBA.values())[ind]
+
+        match = re.match(r"rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([0-9.]+)\s*\)", fc)
+        r, g, b, _ = match.groups()
+        fc_transparent = "rgba({0}, {1}, {2}, 0.15)".format(r, g, b)
+
+        # Add main line for the group
+        fig.add_trace(
+            go.Scatter(
+                x=group_df[x_key],
+                y=group_df[y_key],
+                mode="lines",
+                name="{0}={1}".format(color_key, group_name),
+                legendgroup=group_name,
+                line={
+                    "color": fc
+                }
+            )
+        )
+
+        # Add standard deviation bounds
+        if ("std_bounds" in kwargs):
+            group_df["upper"] = group_df[y_key] + group_df[kwargs["std_bounds"]]
+            group_df["lower"] = group_df[y_key] - group_df[kwargs["std_bounds"]]
+
+            # Add shaded region for ±1 std dev bounds
+            fig.add_trace(
+                go.Scatter(
+                    x=list(group_df[x_key]) + list(group_df[x_key][::-1]),  # x for upper and lower bounds
+                    y=list(group_df["upper"]) + list(group_df["lower"][::-1]),  # y for upper and lower bounds
+                    fill="toself",
+                    fillcolor=fc_transparent,  # Adjust transparency
+                    line=dict(width=0),  # No line
+                    legendgroup=group_name,  # Link to the main line
+                    showlegend=False,  # Hide legend entry for the bounds
+                )
+            )
+
+    # Update layout for better visibility
+    fig.update_layout(
+        # plot_bgcolor="rgb(229, 236, 246)",
+        plot_bgcolor="rgb(240, 242, 246)",
+        font_family="Times New Roman",
+        title=None if "title" not in kwargs or ("show_title" in kwargs and not kwargs["show_title"]) else kwargs["title"],
+        xaxis_title_standoff=10,  # Adjust space between axis title and axis labels
+        margin=dict(l=3, r=3, t=3 if ("show_title" in kwargs and kwargs["show_title"] == False) or "title" not in kwargs else 40, b=3),  # Adjust margins for better spacing
+        yaxis=go.layout.YAxis(
+            title=None if "y_title" not in kwargs or ("show_y" in kwargs and not kwargs["show_y"]) else kwargs["y_title"] ,
+            mirror="ticks",
+            showline=True,
+            linewidth=1,
+            linecolor="black",
+            ticks="outside",
+            dtick=25 if "y_dtick" not in kwargs else kwargs["y_dtick"],
+            tickprefix=None if "y_label_prefix" not in kwargs else kwargs["y_label_prefix"],
+            ticksuffix=None if "y_label_suffix" not in kwargs else kwargs["y_label_suffix"],
+            tickfont={"size": 26 if "main_tick_font_size" not in kwargs else kwargs["main_tick_font_size"]},
+            range=None if "y_lim" not in kwargs else kwargs["y_lim"],
+            minor={"showgrid": False},
+            showticklabels=True if "show_y" not in kwargs else kwargs["show_y"],
+            gridcolor="#bbbbbb",
+            gridwidth=1,
+            zerolinecolor="#bbbbbb",
+            zerolinewidth=1,
+            side="left" if "y_side" not in kwargs else kwargs["y_side"]
+        ),
+        xaxis=go.layout.XAxis(
+            mirror="ticks",
+            showline=True,
+            linewidth=1,
+            linecolor="black",
+            ticks="outside",
+            dtick=25 if "x_dtick" not in kwargs else kwargs["x_dtick"],
+            tickfont={"size": 26 if "main_tick_font_size" not in kwargs else kwargs["main_tick_font_size"]},
+            ticklen=6,
+            title="" if "x_title" not in kwargs or ("show_x" in kwargs and not kwargs["show_x"]) else kwargs["x_title"],
+            range=None if "x_lim" not in kwargs else kwargs["x_lim"],
+            minor={"showgrid": False},
+            showticklabels=True if "show_x" not in kwargs else kwargs["show_x"],
+            gridcolor="#bbbbbb",
+            gridwidth=1,
+            zerolinecolor="#bbbbbb",
+            zerolinewidth=1,
+        ), # Explicit tick values and labels
+        legend=go.layout.Legend(
+            title="" if "legend_title" not in kwargs else kwargs["legend_title"],
+            font={"size": 18 if "legend_font_size" not in kwargs else kwargs["legend_font_size"]},
+            orientation="v" if "legend_orientation" not in kwargs else kwargs["legend_orientation"],
+            xref="container",
+            yref="container",
+            x=None if "legend_x" not in kwargs else kwargs["legend_x"],
+            y=None if "legend_y" not in kwargs else kwargs["legend_y"],
+            itemsizing="trace",
+            tracegroupgap=10 if "legend_trace_group_gap" not in kwargs else kwargs["legend_trace_group_gap"],
+            valign="middle",
+            bordercolor="black",
+            borderwidth=1,
+        ),
+        showlegend=True if "show_legend" not in kwargs else kwargs["show_legend"],
+        coloraxis_showscale=True if "show_legend" not in kwargs else kwargs["show_legend"]
+    )
+
+    fig.show()
+
+    if "output_path" in kwargs and kwargs["output_path"] is not None:
+        fig.write_image(
+            kwargs["output_path"],
+            width=1300 if "fig_width" not in kwargs else kwargs["fig_width"],
+            height=650 if "fig_height" not in kwargs else kwargs["fig_height"],
+            scale=1.0
+        )
+
+    return fig
+
+################################################################################
+################################################################################

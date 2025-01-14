@@ -13,6 +13,7 @@ setuptools.setup(
         "scripts/python/extract_convergence_accuracy_data.py",
         "scripts/python/extract_decision_data.py",
         "scripts/python/extract_dynamic_degradation_data.py",
-        "scripts/python/compute_rmsd_df.py"
+        "scripts/python/compute_rmsd_df.py",
+        "scripts/python/extract_isolated_rmsd_data.py"
     ]
 )

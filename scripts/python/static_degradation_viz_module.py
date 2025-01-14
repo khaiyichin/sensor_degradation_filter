@@ -1042,14 +1042,14 @@ COLOR_BLIND_FRIENDLY_COLORS_DICT_HEX = {
 }
 
 COLOR_BLIND_FRIENDLY_COLORS_DICT_RGBA = {
-    "black": "rgba(0, 0, 0, 255)",
-    "orange": "rgba(230, 159, 0, 255)",
-    "sky_blue": "rgba(86, 180, 233, 255)",
-    "green": "rgba(0, 158, 115, 255)",
-    "yellow": "rgba(240, 228, 66, 255)",
-    "blue": "rgba(0, 114, 178, 255)",
-    "vermillion": "rgba(213, 94, 0, 255)",
-    "pink": "rgba(204, 121, 167, 255)"
+    "black": "rgba(0, 0, 0, 1.0)",
+    "orange": "rgba(230, 159, 0, 1.0)",
+    "sky_blue": "rgba(86, 180, 233, 1.0)",
+    "green": "rgba(0, 158, 115, 1.0)",
+    "yellow": "rgba(240, 228, 66, 1.0)",
+    "blue": "rgba(0, 114, 178, 1.0)",
+    "vermillion": "rgba(213, 94, 0, 1.0)",
+    "pink": "rgba(204, 121, 167, 1.0)"
 }
 
 def plot_multix_boxplot_plotly(
@@ -1431,7 +1431,7 @@ def plot_scatter_plotly(
 
     # Update layout for better visibility
     fig.update_layout(
-        font_family="Noto Sans",
+        font_family="Times New Roman",
         title=None if "title" not in kwargs or ("show_title" in kwargs and not kwargs["show_title"]) else kwargs["title"],
         xaxis_title_standoff=10,  # Adjust space between axis title and axis labels
         margin=dict(l=3, r=3, t=3 if ("show_title" in kwargs and kwargs["show_title"] == False) or "title" not in kwargs else 40, b=3),  # Adjust margins for better spacing
